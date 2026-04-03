@@ -1,0 +1,118 @@
+{
+  "schema_version": "v2",
+  "scenario_id": "single_name_breaking_news",
+  "name": "Breaking News Drill",
+  "summary": "Re-underwrite ORCL after a sudden headline changes the near-term setup before the committee can commit capital.",
+  "instrument": "ORCL",
+  "instrument_universe": ["ORCL"],
+  "instrument_label": "ORCL",
+  "primary_runtime": "wayflow",
+  "parity_runtime": "langgraph",
+  "thesis_prompt": "Determine whether the fund should buy, short, avoid, or defer ORCL after a breaking headline forces a fast desk reroute and second-pass risk review.",
+  "decision_question": "Should the desk act immediately on the headline, defer until confirmation, or stay neutral?",
+  "scenario_type": "breaking_news_reunderwrite",
+  "starting_position_state": {
+    "stance": "neutral",
+    "position_action": "defer",
+    "size_bps": 0,
+    "existing_position": false
+  },
+  "allowed_end_states": {
+    "stances": ["long", "short", "neutral"],
+    "actions": ["initiate", "defer"]
+  },
+  "seat_plan": {
+    "required": [
+      "market_analyst",
+      "news_analyst",
+      "fundamentals_analyst",
+      "bull_researcher",
+      "bear_researcher",
+      "research_manager",
+      "quant_analyst",
+      "risk_manager",
+      "portfolio_manager",
+      "trader"
+    ],
+    "optional": [
+      "social_analyst",
+      "macro_economist",
+      "neutral_analyst",
+      "conservative_analyst"
+    ],
+    "scenario_overrides": {
+      "prefer_enabled": ["macro_economist", "neutral_analyst"],
+      "suppress": ["aggressive_analyst", "geopolitical_analyst"]
+    }
+  },
+  "branch_conditions": {
+    "force_breaking_news": true,
+    "requires_news_confirmation": true,
+    "pair_trade_mode": false,
+    "thesis_break_mode": false,
+    "time_sensitive_debate": true,
+    "prefer_enabled": ["macro_economist", "neutral_analyst"],
+    "suppress_seats": ["aggressive_analyst", "geopolitical_analyst"]
+  },
+  "pm_decision_policy": {
+    "signal_bias": -0.35,
+    "long_signal_threshold": 2.0,
+    "short_signal_threshold": -1.15,
+    "neutral_vote_band": 1,
+    "warning_size_multiplier": 0.65,
+    "confirmation_requires_strong_edge": true,
+    "size_ranges_bps": {
+      "long": [15, 45],
+      "short": [15, 40],
+      "neutral": [0, 0]
+    },
+    "action_map": {
+      "long": "initiate",
+      "short": "initiate",
+      "neutral": "defer"
+    },
+    "preview": {
+      "outcome": "approved_with_changes",
+      "position_size_bps": "0-45",
+      "approval_notes": "Act only with confirmation; otherwise stay neutral and wait."
+    }
+  },
+  "constraints": [
+    {
+      "constraint_id": "max_position_bps",
+      "constraint_type": "position_limit",
+      "label": "Headline-driven gross position cap",
+      "value": 100,
+      "severity": "blocking"
+    },
+    {
+      "constraint_id": "headline_confirmation",
+      "constraint_type": "mandate",
+      "label": "Second-source confirmation required before full sizing",
+      "value": "required",
+      "severity": "warning"
+    },
+    {
+      "constraint_id": "event_risk_gate",
+      "constraint_type": "event_risk",
+      "label": "Breaking-news event requires explicit PM approval",
+      "value": true,
+      "severity": "blocking"
+    },
+    {
+      "constraint_id": "liquidity_check",
+      "constraint_type": "liquidity",
+      "label": "Execution must fit live liquidity and spread conditions",
+      "value": "required",
+      "severity": "blocking"
+    }
+  ],
+  "demo_mode": {
+    "trade_side": "BUY",
+    "time_horizon": "event_tactical",
+    "force_breaking_news": true,
+    "position_context": "Fresh headline reroute with incomplete information and elevated implementation risk.",
+    "quant_metric_budget": 3,
+    "allow_partial_metrics": true
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/objects/v1/artifact.schema.json",
+  "title": "Artifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "artifact_id", "artifact_type", "label", "storage_uri", "provenance"],
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schemaVersion"},
+    "artifact_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "artifact_type": {"type": "string", "enum": ["chart", "notebook", "summary_memo", "trade_ticket", "monitoring_plan", "risk_memo"]},
+    "label": {"type": "string", "minLength": 1},
+    "storage_uri": {"type": "string", "minLength": 1},
+    "content_type": {"type": "string"},
+    "provenance": {"$ref": "common.schema.json#/$defs/provenance"}
+  }
+}

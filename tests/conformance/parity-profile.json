@@ -1,0 +1,23 @@
+{
+  "schema_version": "v1",
+  "comparison_rules": {
+    "exact_match": [
+      "stage_sequence",
+      "event_type_sets_by_stage",
+      "required_object_ids",
+      "decision.outcome",
+      "trade_ticket.side",
+      "trade_ticket.size_bps"
+    ],
+    "ignore": [
+      "event_id",
+      "emitted_at",
+      "provenance.emitted_at",
+      "runtime_native_trace_id",
+      "free_text_summary"
+    ],
+    "tolerance": {
+      "metric.value": 0.0001
+    }
+  }
+}

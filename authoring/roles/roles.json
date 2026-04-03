@@ -1,0 +1,117 @@
+{
+  "schema_version": "v1",
+  "roles": [
+    {
+      "id": "market_analyst",
+      "display_name": "Market Analyst",
+      "charter": "Turn market context and price action into typed evidence for the desk.",
+      "allowed_outputs": ["source", "evidence"],
+      "disallowed_outputs": ["decision", "trade_ticket"]
+    },
+    {
+      "id": "news_analyst",
+      "display_name": "News Analyst",
+      "charter": "Summarize relevant news and channel checks into evidence cards.",
+      "allowed_outputs": ["source", "evidence"],
+      "disallowed_outputs": ["decision", "trade_ticket"]
+    },
+    {
+      "id": "fundamentals_analyst",
+      "display_name": "Fundamentals Analyst",
+      "charter": "Assess earnings setup, valuation, and estimate revision direction.",
+      "allowed_outputs": ["source", "evidence"],
+      "disallowed_outputs": ["decision", "trade_ticket"]
+    },
+    {
+      "id": "macro_economist",
+      "display_name": "Macro Economist",
+      "charter": "Translate macro regime and rates context into scenario-relevant evidence.",
+      "allowed_outputs": ["source", "evidence"],
+      "disallowed_outputs": ["trade_ticket"]
+    },
+    {
+      "id": "geopolitical_analyst",
+      "display_name": "Geopolitical Analyst",
+      "charter": "Surface geopolitical shocks when cross-border or country-risk conditions are triggered.",
+      "allowed_outputs": ["source", "evidence"],
+      "disallowed_outputs": ["trade_ticket"]
+    },
+    {
+      "id": "social_analyst",
+      "display_name": "Social Analyst",
+      "charter": "Surface sentiment and crowding signals as secondary context.",
+      "allowed_outputs": ["source", "evidence"],
+      "disallowed_outputs": ["decision", "trade_ticket"]
+    },
+    {
+      "id": "aggressive_analyst",
+      "display_name": "Aggressive Analyst",
+      "charter": "Argue for maximizing upside within the mandate when the setup is favorable.",
+      "allowed_outputs": ["claim"],
+      "disallowed_outputs": ["trade_ticket"]
+    },
+    {
+      "id": "conservative_analyst",
+      "display_name": "Conservative Analyst",
+      "charter": "Argue for preserving capital and reducing event exposure.",
+      "allowed_outputs": ["claim"],
+      "disallowed_outputs": ["trade_ticket"]
+    },
+    {
+      "id": "neutral_analyst",
+      "display_name": "Neutral Analyst",
+      "charter": "Frame the balanced base case when directional conviction is mixed.",
+      "allowed_outputs": ["claim"],
+      "disallowed_outputs": ["trade_ticket"]
+    },
+    {
+      "id": "bull_researcher",
+      "display_name": "Bull Researcher",
+      "charter": "Produce the strongest long thesis using available evidence.",
+      "allowed_outputs": ["claim"],
+      "disallowed_outputs": ["trade_ticket"]
+    },
+    {
+      "id": "bear_researcher",
+      "display_name": "Bear Researcher",
+      "charter": "Produce the strongest counter-case and visible dissent.",
+      "allowed_outputs": ["claim"],
+      "disallowed_outputs": ["trade_ticket"]
+    },
+    {
+      "id": "research_manager",
+      "display_name": "Research Manager",
+      "charter": "Synthesize evidence and claims into a typed research recommendation.",
+      "allowed_outputs": ["decision", "artifact"],
+      "disallowed_outputs": ["trade_ticket"]
+    },
+    {
+      "id": "quant_analyst",
+      "display_name": "Quant Analyst",
+      "charter": "Run bounded quant analysis and emit metrics plus notebook artifacts.",
+      "allowed_outputs": ["metric", "artifact"],
+      "disallowed_outputs": ["decision", "trade_ticket"]
+    },
+    {
+      "id": "risk_manager",
+      "display_name": "Risk Manager",
+      "charter": "Apply desk constraints and emit risk review decisions and constraints.",
+      "allowed_outputs": ["constraint", "decision", "artifact"],
+      "disallowed_outputs": ["claim"]
+    },
+    {
+      "id": "portfolio_manager",
+      "display_name": "Portfolio Manager",
+      "charter": "Approve, edit, or reject the recommendation.",
+      "allowed_outputs": ["decision"],
+      "disallowed_outputs": ["source", "metric"]
+    },
+    {
+      "id": "trader",
+      "display_name": "Trader",
+      "charter": "Turn the approved decision into a trade ticket and monitoring plan.",
+      "allowed_outputs": ["trade_ticket", "artifact"],
+      "disallowed_outputs": ["claim"]
+    }
+  ]
+}

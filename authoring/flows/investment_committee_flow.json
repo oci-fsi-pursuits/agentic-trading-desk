@@ -1,0 +1,15 @@
+{
+  "schema_version": "v1",
+  "flow_id": "investment_committee_v1",
+  "name": "Investment Committee Flow",
+  "stages": [
+    {"id": "gather", "required_roles": ["market_analyst", "news_analyst", "fundamentals_analyst"], "parallel": true},
+    {"id": "debate", "required_roles": ["bull_researcher", "bear_researcher"], "parallel": true},
+    {"id": "quantify", "required_roles": ["quant_analyst"], "parallel": false},
+    {"id": "synthesize", "required_roles": ["research_manager"], "parallel": false},
+    {"id": "risk_review", "required_roles": ["risk_manager"], "parallel": false},
+    {"id": "pm_review", "required_roles": ["portfolio_manager"], "parallel": false},
+    {"id": "trade_finalize", "required_roles": ["trader"], "parallel": false},
+    {"id": "monitor", "required_roles": ["trader"], "parallel": false}
+  ]
+}

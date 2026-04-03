@@ -1,0 +1,110 @@
+{
+  "schema_version": "v2",
+  "scenario_id": "thesis_break_monitoring",
+  "name": "Thesis Break Review",
+  "summary": "Review an existing SNOW long after evidence has deteriorated and decide whether to hold, trim, or exit.",
+  "instrument": "SNOW",
+  "instrument_universe": ["SNOW"],
+  "instrument_label": "SNOW",
+  "primary_runtime": "wayflow",
+  "parity_runtime": "langgraph",
+  "thesis_prompt": "Determine whether the desk should continue holding, reduce, or fully exit an existing SNOW long after the original thesis has weakened.",
+  "decision_question": "Should the desk keep holding the position, trim it materially, or exit completely?",
+  "scenario_type": "thesis_break_review",
+  "starting_position_state": {
+    "stance": "long",
+    "position_action": "hold",
+    "size_bps": 100,
+    "existing_position": true
+  },
+  "allowed_end_states": {
+    "stances": ["long", "neutral"],
+    "actions": ["hold", "trim", "exit"]
+  },
+  "seat_plan": {
+    "required": [
+      "market_analyst",
+      "news_analyst",
+      "fundamentals_analyst",
+      "bull_researcher",
+      "bear_researcher",
+      "research_manager",
+      "quant_analyst",
+      "risk_manager",
+      "portfolio_manager",
+      "trader"
+    ],
+    "optional": [
+      "social_analyst",
+      "macro_economist",
+      "geopolitical_analyst",
+      "neutral_analyst",
+      "conservative_analyst"
+    ],
+    "scenario_overrides": {
+      "prefer_enabled": ["conservative_analyst", "neutral_analyst"],
+      "suppress": ["aggressive_analyst"]
+    }
+  },
+  "branch_conditions": {
+    "force_breaking_news": false,
+    "requires_news_confirmation": false,
+    "pair_trade_mode": false,
+    "thesis_break_mode": true,
+    "prefer_enabled": ["conservative_analyst", "neutral_analyst"],
+    "suppress_seats": ["aggressive_analyst"]
+  },
+  "pm_decision_policy": {
+    "signal_bias": -0.2,
+    "exit_signal_threshold": -2.5,
+    "trim_signal_threshold": -0.9,
+    "warning_size_multiplier": 1.0,
+    "size_ranges_bps": {
+      "hold": [85, 100],
+      "trim": [35, 65],
+      "exit": [100, 100]
+    },
+    "preview": {
+      "outcome": "approved",
+      "position_size_bps": "35-100",
+      "approval_notes": "Default posture is defensive; exit on severe thesis damage, otherwise trim or hold with caution."
+    }
+  },
+  "constraints": [
+    {
+      "constraint_id": "max_drawdown_response",
+      "constraint_type": "mandate",
+      "label": "Thesis break requires explicit PM response",
+      "value": "required",
+      "severity": "blocking"
+    },
+    {
+      "constraint_id": "liquidity_check",
+      "constraint_type": "liquidity",
+      "label": "Exit path must fit normal market depth",
+      "value": "required",
+      "severity": "blocking"
+    },
+    {
+      "constraint_id": "software_factor_correlation",
+      "constraint_type": "correlation",
+      "label": "Residual software factor exposure must be reviewed",
+      "value": "elevated_watch",
+      "severity": "warning"
+    },
+    {
+      "constraint_id": "position_limit",
+      "constraint_type": "position_limit",
+      "label": "Remaining exposure cap after review",
+      "value": 0,
+      "severity": "blocking"
+    }
+  ],
+  "demo_mode": {
+    "trade_side": "SELL",
+    "time_horizon": "swing",
+    "position_context": "Existing long position is already on the book; the desk is deciding whether to hold, trim, or exit.",
+    "quant_metric_budget": 3,
+    "allow_partial_metrics": true
+  }
+}

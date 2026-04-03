@@ -1,0 +1,21 @@
+{
+  "schema_version": "v1",
+  "roles": [
+    {"id": "market_analyst", "display_name": "Market Analyst", "class": "research", "default_mode": "optional"},
+    {"id": "social_analyst", "display_name": "Social Analyst", "class": "research", "default_mode": "optional"},
+    {"id": "news_analyst", "display_name": "News Analyst", "class": "research", "default_mode": "optional"},
+    {"id": "fundamentals_analyst", "display_name": "Fundamentals Analyst", "class": "research", "default_mode": "optional"},
+    {"id": "bull_researcher", "display_name": "Bull Researcher", "class": "debate", "default_mode": "required"},
+    {"id": "bear_researcher", "display_name": "Bear Researcher", "class": "debate", "default_mode": "required"},
+    {"id": "aggressive_analyst", "display_name": "Aggressive Analyst", "class": "stance", "default_mode": "optional"},
+    {"id": "conservative_analyst", "display_name": "Conservative Analyst", "class": "stance", "default_mode": "optional"},
+    {"id": "neutral_analyst", "display_name": "Neutral Analyst", "class": "stance", "default_mode": "optional"},
+    {"id": "research_manager", "display_name": "Research Manager", "class": "core", "default_mode": "required"},
+    {"id": "quant_analyst", "display_name": "Quant Analyst", "class": "core", "default_mode": "required"},
+    {"id": "macro_economist", "display_name": "Macro Economist", "class": "overlay", "default_mode": "optional"},
+    {"id": "geopolitical_analyst", "display_name": "Geopolitical Analyst", "class": "overlay", "default_mode": "optional"},
+    {"id": "risk_manager", "display_name": "Risk Manager", "class": "core", "default_mode": "required"},
+    {"id": "portfolio_manager", "display_name": "Portfolio Manager", "class": "core", "default_mode": "required"},
+    {"id": "trader", "display_name": "Trader", "class": "core", "default_mode": "required"}
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "schema_version": "v1",
+  "stages": [
+    {"id": "gather", "display_name": "Gather", "sequence": 10, "terminal": false},
+    {"id": "debate", "display_name": "Debate", "sequence": 20, "terminal": false},
+    {"id": "quantify", "display_name": "Quantify", "sequence": 30, "terminal": false},
+    {"id": "synthesize", "display_name": "Synthesize", "sequence": 40, "terminal": false},
+    {"id": "risk_review", "display_name": "Risk Review", "sequence": 50, "terminal": false},
+    {"id": "pm_review", "display_name": "Portfolio Manager Review", "sequence": 60, "terminal": false},
+    {"id": "trade_finalize", "display_name": "Trade Finalize", "sequence": 70, "terminal": false},
+    {"id": "monitor", "display_name": "Monitor", "sequence": 80, "terminal": false},
+    {"id": "completed", "display_name": "Completed", "sequence": 90, "terminal": true},
+    {"id": "failed", "display_name": "Failed", "sequence": 99, "terminal": true}
+  ]
+}

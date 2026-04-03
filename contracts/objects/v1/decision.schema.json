@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/objects/v1/decision.schema.json",
+  "title": "Decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "decision_id", "decision_type", "outcome", "linked_claim_ids", "linked_constraint_ids", "provenance"],
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schemaVersion"},
+    "decision_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "decision_type": {"type": "string", "enum": ["research_recommendation", "risk_review", "pm_approval"]},
+    "outcome": {"type": "string", "enum": ["approved", "approved_with_changes", "rejected", "needs_follow_up"]},
+    "position_size_bps": {"type": "number", "minimum": 0},
+    "linked_claim_ids": {
+      "type": "array",
+      "items": {"$ref": "common.schema.json#/$defs/identifier"},
+      "default": []
+    },
+    "linked_constraint_ids": {
+      "type": "array",
+      "items": {"$ref": "common.schema.json#/$defs/identifier"},
+      "default": []
+    },
+    "dissent_claim_ids": {
+      "type": "array",
+      "items": {"$ref": "common.schema.json#/$defs/identifier"},
+      "default": []
+    },
+    "requires_risk_recheck": {"type": "boolean", "default": false},
+    "provenance": {"$ref": "common.schema.json#/$defs/provenance"}
+  }
+}

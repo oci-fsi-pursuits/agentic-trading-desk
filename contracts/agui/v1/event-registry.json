@@ -1,0 +1,20 @@
+{
+  "schema_version": "v1",
+  "events": [
+    {"type": "run.started", "payload_schema": "run.started.schema.json"},
+    {"type": "stage.started", "payload_schema": "stage.started.schema.json"},
+    {"type": "seat.activated", "payload_schema": "seat.activated.schema.json"},
+    {"type": "source.ingested", "payload_schema": "source.ingested.schema.json"},
+    {"type": "evidence.upserted", "payload_schema": "object.upserted.schema.json"},
+    {"type": "claim.upserted", "payload_schema": "object.upserted.schema.json"},
+    {"type": "metric.upserted", "payload_schema": "object.upserted.schema.json"},
+    {"type": "artifact.created", "payload_schema": "artifact.created.schema.json"},
+    {"type": "approval.requested", "payload_schema": "approval.requested.schema.json"},
+    {"type": "approval.resolved", "payload_schema": "approval.resolved.schema.json"},
+    {"type": "risk.rechecked", "payload_schema": "risk.rechecked.schema.json"},
+    {"type": "ticket.updated", "payload_schema": "ticket.updated.schema.json"},
+    {"type": "stage.completed", "payload_schema": "stage.completed.schema.json"},
+    {"type": "run.completed", "payload_schema": "run.completed.schema.json"},
+    {"type": "run.failed", "payload_schema": "run.failed.schema.json"}
+  ]
+}

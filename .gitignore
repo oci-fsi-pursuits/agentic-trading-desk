@@ -1,0 +1,8 @@
+.gstack-local/
+.gstack/
+.DS_Store
+__pycache__/
+*.pyc
+var/
+.env
+.venv/

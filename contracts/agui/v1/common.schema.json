@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/agui/v1/common.schema.json",
+  "title": "AG-UI Common Event Definitions",
+  "$defs": {
+    "schemaVersion": {"type": "string", "const": "v1"},
+    "eventId": {"type": "string", "pattern": "^[a-z][a-z0-9_\\-.]*$"},
+    "runId": {"type": "string", "pattern": "^[a-z][a-z0-9_\\-.]*$"},
+    "stageId": {
+      "type": "string",
+      "enum": ["gather", "debate", "quantify", "synthesize", "risk_review", "pm_review", "trade_finalize", "monitor", "completed", "failed"]
+    },
+    "roleId": {
+      "type": "string",
+      "enum": [
+        "market_analyst", "social_analyst", "news_analyst", "fundamentals_analyst",
+        "bull_researcher", "bear_researcher", "aggressive_analyst", "conservative_analyst",
+        "neutral_analyst", "research_manager", "quant_analyst", "macro_economist",
+        "geopolitical_analyst", "risk_manager", "portfolio_manager", "trader"
+      ]
+    },
+    "eventType": {
+      "type": "string",
+      "enum": [
+        "run.started", "stage.started", "seat.activated", "source.ingested",
+        "evidence.upserted", "claim.upserted", "metric.upserted", "artifact.created",
+        "approval.requested", "approval.resolved", "risk.rechecked", "ticket.updated",
+        "stage.completed", "run.completed", "run.failed"
+      ]
+    },
+    "timestamp": {"type": "string", "format": "date-time"},
+    "baseEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "event_id", "event_type", "run_id", "stage_id", "emitted_at", "producer", "payload"],
+      "properties": {
+        "schema_version": {"$ref": "#/$defs/schemaVersion"},
+        "event_id": {"$ref": "#/$defs/eventId"},
+        "event_type": {"$ref": "#/$defs/eventType"},
+        "run_id": {"$ref": "#/$defs/runId"},
+        "stage_id": {"$ref": "#/$defs/stageId"},
+        "emitted_at": {"$ref": "#/$defs/timestamp"},
+        "producer": {"$ref": "#/$defs/roleId"},
+        "payload": {"type": "object"}
+      }
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "schema_version": "v1",
+  "dataset_id": "single_name_breaking_news_orcl_v1",
+  "instrument": "ORCL",
+  "as_of": "2026-03-31T15:30:00Z",
+  "price_series": [149.8, 150.4, 151.2, 152.6, 153.1, 154.0, 153.6, 152.2, 149.7, 148.9],
+  "estimate_revisions_pct": [0.2, 0.3, 0.4, 0.5, 0.4, 0.4, 0.2, 0.1, -0.1, -0.2],
+  "volume_millions": [8.8, 9.1, 8.9, 9.4, 9.0, 9.8, 10.2, 11.6, 14.8, 16.1],
+  "ai_basket_correlation": 0.58,
+  "sentiment_score": 0.42,
+  "macro_risk": "moderate",
+  "news_items": [],
+  "fundamentals": {
+    "estimate_revision_trend": "mixed",
+    "valuation_state": "fair_to_rich",
+    "gross_margin_watch": false,
+    "demand_signal": "steady"
+  },
+  "market_context": {
+    "momentum_20d_pct": -0.6,
+    "event_risk": "very_high",
+    "liquidity": "acceptable_with_wider_spreads"
+  }
+}

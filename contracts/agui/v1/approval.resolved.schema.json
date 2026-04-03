@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/agui/v1/approval.resolved.schema.json",
+  "allOf": [
+    {"$ref": "common.schema.json#/$defs/baseEnvelope"},
+    {
+      "properties": {
+        "event_type": {"const": "approval.resolved"},
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["approval_request_id", "outcome", "requires_risk_recheck"],
+          "properties": {
+            "approval_request_id": {"type": "string"},
+            "outcome": {"type": "string", "enum": ["approved", "approved_with_changes", "rejected"]},
+            "requires_risk_recheck": {"type": "boolean"}
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/objects/v1/metric.schema.json",
+  "title": "Metric",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "metric_id", "name", "value", "unit", "code_artifact_id", "confidence", "provenance"],
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schemaVersion"},
+    "metric_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "name": {"type": "string", "minLength": 1},
+    "value": {"type": ["number", "string"]},
+    "unit": {"type": "string", "minLength": 1},
+    "code_artifact_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "confidence": {"$ref": "common.schema.json#/$defs/confidence"},
+    "coverage": {"type": "string", "enum": ["full", "partial"]},
+    "provenance": {"$ref": "common.schema.json#/$defs/provenance"}
+  }
+}

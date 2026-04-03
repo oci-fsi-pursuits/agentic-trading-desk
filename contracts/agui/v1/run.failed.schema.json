@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/agui/v1/run.failed.schema.json",
+  "allOf": [
+    {"$ref": "common.schema.json#/$defs/baseEnvelope"},
+    {
+      "properties": {
+        "event_type": {"const": "run.failed"},
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["error_code", "message"],
+          "properties": {
+            "error_code": {"type": "string"},
+            "message": {"type": "string"}
+          }
+        }
+      }
+    }
+  ]
+}

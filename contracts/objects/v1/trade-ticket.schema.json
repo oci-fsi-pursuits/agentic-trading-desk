@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/objects/v1/trade-ticket.schema.json",
+  "title": "Trade Ticket",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "ticket_id", "instrument", "side", "size_bps", "time_horizon", "constraint_ids", "approved_by", "provenance"],
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schemaVersion"},
+    "ticket_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "instrument": {"type": "string", "minLength": 1},
+    "side": {"type": "string", "enum": ["BUY", "SELL", "HOLD"]},
+    "size_bps": {"type": "number", "minimum": 0},
+    "time_horizon": {"type": "string", "enum": ["event_tactical", "swing", "core_position"]},
+    "entry_conditions": {
+      "type": "array",
+      "items": {"type": "string"},
+      "default": []
+    },
+    "exit_conditions": {
+      "type": "array",
+      "items": {"type": "string"},
+      "default": []
+    },
+    "constraint_ids": {
+      "type": "array",
+      "items": {"$ref": "common.schema.json#/$defs/identifier"},
+      "default": []
+    },
+    "approved_by": {"$ref": "common.schema.json#/$defs/roleId"},
+    "provenance": {"$ref": "common.schema.json#/$defs/provenance"}
+  }
+}

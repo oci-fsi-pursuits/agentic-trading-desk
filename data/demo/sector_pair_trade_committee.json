@@ -1,0 +1,25 @@
+{
+  "schema_version": "v1",
+  "dataset_id": "sector_pair_trade_committee_nvda_amd_v1",
+  "instrument": "NVDA",
+  "pair_peer": "AMD",
+  "as_of": "2026-03-31T15:00:00Z",
+  "price_series": [118.2, 120.0, 121.6, 123.8, 125.2, 126.9, 128.3, 129.1, 130.2, 132.4],
+  "estimate_revisions_pct": [0.2, 0.4, 0.5, 0.7, 0.8, 0.8, 0.9, 1.0, 0.9, 1.0],
+  "volume_millions": [41.2, 42.4, 43.8, 44.9, 45.5, 46.8, 48.1, 49.7, 50.2, 51.4],
+  "ai_basket_correlation": 0.83,
+  "sentiment_score": 0.66,
+  "macro_risk": "moderate",
+  "news_items": [],
+  "fundamentals": {
+    "estimate_revision_trend": "positive_relative",
+    "valuation_state": "rich_but_supported",
+    "gross_margin_watch": true,
+    "demand_signal": "strong_relative"
+  },
+  "market_context": {
+    "momentum_20d_pct": 12.0,
+    "event_risk": "moderate",
+    "liquidity": "deep"
+  }
+}

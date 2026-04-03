@@ -1,0 +1,315 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/scenarios/v1/scenario.schema.json",
+  "title": "Scenario Definition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scenario_id",
+    "name",
+    "summary",
+    "instrument",
+    "instrument_universe",
+    "instrument_label",
+    "primary_runtime",
+    "parity_runtime",
+    "thesis_prompt",
+    "decision_question",
+    "scenario_type",
+    "starting_position_state",
+    "allowed_end_states",
+    "seat_plan",
+    "branch_conditions",
+    "pm_decision_policy",
+    "constraints",
+    "demo_mode"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "v2" },
+    "scenario_id": { "$ref": "#/$defs/identifier" },
+    "name": { "type": "string", "minLength": 1 },
+    "summary": { "type": "string", "minLength": 1 },
+    "instrument": { "$ref": "#/$defs/ticker" },
+    "instrument_universe": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/ticker" }
+    },
+    "instrument_label": { "type": "string", "minLength": 1 },
+    "pair_peer": { "$ref": "#/$defs/ticker" },
+    "primary_runtime": { "$ref": "#/$defs/runtime" },
+    "parity_runtime": { "$ref": "#/$defs/runtime" },
+    "runtime_goal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "primary_runtime": { "$ref": "#/$defs/runtime" },
+        "parity_runtime": { "$ref": "#/$defs/runtime" }
+      }
+    },
+    "thesis_prompt": { "type": "string", "minLength": 1 },
+    "decision_question": { "type": "string", "minLength": 1 },
+    "scenario_type": { "$ref": "#/$defs/scenarioType" },
+    "starting_position_state": { "$ref": "#/$defs/positionState" },
+    "allowed_end_states": { "$ref": "#/$defs/allowedEndStates" },
+    "seat_plan": { "$ref": "#/$defs/seatPlan" },
+    "required_seat_ids": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/roleId" },
+      "uniqueItems": true
+    },
+    "optional_seat_ids": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/roleId" },
+      "uniqueItems": true
+    },
+    "branch_conditions": { "$ref": "#/$defs/branchConditions" },
+    "pm_decision_policy": { "$ref": "#/$defs/pmDecisionPolicy" },
+    "constraints": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/constraint" }
+    },
+    "demo_mode": { "$ref": "#/$defs/demoMode" }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_\\-.]*$"
+    },
+    "ticker": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9.-]{0,9}$"
+    },
+    "runtime": {
+      "type": "string",
+      "enum": ["wayflow", "langgraph"]
+    },
+    "scenarioType": {
+      "type": "string",
+      "enum": [
+        "pre_event_initiation",
+        "breaking_news_reunderwrite",
+        "relative_value_pair",
+        "thesis_break_review"
+      ]
+    },
+    "stance": {
+      "type": "string",
+      "enum": ["long", "short", "neutral"]
+    },
+    "positionAction": {
+      "type": "string",
+      "enum": ["initiate", "add", "hold", "trim", "exit", "defer"]
+    },
+    "roleId": {
+      "type": "string",
+      "enum": [
+        "market_analyst",
+        "social_analyst",
+        "news_analyst",
+        "fundamentals_analyst",
+        "bull_researcher",
+        "bear_researcher",
+        "aggressive_analyst",
+        "conservative_analyst",
+        "neutral_analyst",
+        "research_manager",
+        "quant_analyst",
+        "macro_economist",
+        "geopolitical_analyst",
+        "risk_manager",
+        "portfolio_manager",
+        "trader"
+      ]
+    },
+    "positionState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stance", "position_action", "size_bps", "existing_position"],
+      "properties": {
+        "stance": { "$ref": "#/$defs/stance" },
+        "position_action": { "$ref": "#/$defs/positionAction" },
+        "size_bps": { "type": "integer", "minimum": 0 },
+        "existing_position": { "type": "boolean" }
+      }
+    },
+    "allowedEndStates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stances", "actions"],
+      "properties": {
+        "stances": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/stance" }
+        },
+        "actions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/positionAction" }
+        }
+      }
+    },
+    "seatOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "prefer_enabled": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/roleId" },
+          "uniqueItems": true
+        },
+        "suppress": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/roleId" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "seatPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "optional", "scenario_overrides"],
+      "properties": {
+        "required": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/roleId" }
+        },
+        "optional": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/roleId" }
+        },
+        "scenario_overrides": { "$ref": "#/$defs/seatOverride" }
+      }
+    },
+    "branchConditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "force_breaking_news",
+        "requires_news_confirmation",
+        "pair_trade_mode",
+        "thesis_break_mode",
+        "prefer_enabled",
+        "suppress_seats"
+      ],
+      "properties": {
+        "force_breaking_news": { "type": "boolean" },
+        "requires_news_confirmation": { "type": "boolean" },
+        "pair_trade_mode": { "type": "boolean" },
+        "thesis_break_mode": { "type": "boolean" },
+        "time_sensitive_debate": { "type": "boolean" },
+        "prefer_enabled": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/roleId" }
+        },
+        "suppress_seats": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/roleId" }
+        }
+      }
+    },
+    "bpsRange": {
+      "type": "array",
+      "prefixItems": [
+        { "type": "integer", "minimum": 0 },
+        { "type": "integer", "minimum": 0 }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "preview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "position_size_bps", "approval_notes"],
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "enum": ["approved", "approved_with_changes", "rejected"]
+        },
+        "position_size_bps": {
+          "oneOf": [
+            { "type": "integer", "minimum": 0 },
+            { "type": "string", "minLength": 1 }
+          ]
+        },
+        "approval_notes": { "type": "string", "minLength": 1 }
+      }
+    },
+    "pmDecisionPolicy": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["warning_size_multiplier", "size_ranges_bps", "preview"],
+      "properties": {
+        "signal_bias": { "type": "number" },
+        "long_signal_threshold": { "type": "number" },
+        "short_signal_threshold": { "type": "number" },
+        "exit_signal_threshold": { "type": "number" },
+        "trim_signal_threshold": { "type": "number" },
+        "neutral_vote_band": { "type": "integer", "minimum": 0 },
+        "warning_size_multiplier": { "type": "number" },
+        "confirmation_requires_strong_edge": { "type": "boolean" },
+        "allow_short": { "type": "boolean" },
+        "size_ranges_bps": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/bpsRange" }
+        },
+        "action_map": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/positionAction" }
+        },
+        "preview": { "$ref": "#/$defs/preview" }
+      }
+    },
+    "constraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["constraint_id", "constraint_type", "label", "value", "severity"],
+      "properties": {
+        "constraint_id": { "$ref": "#/$defs/identifier" },
+        "constraint_type": {
+          "type": "string",
+          "enum": ["position_limit", "liquidity", "correlation", "event_risk", "mandate"]
+        },
+        "label": { "type": "string", "minLength": 1 },
+        "value": {},
+        "severity": {
+          "type": "string",
+          "enum": ["info", "warning", "blocking"]
+        }
+      }
+    },
+    "demoMode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trade_side", "time_horizon", "position_context", "quant_metric_budget", "allow_partial_metrics"],
+      "properties": {
+        "trade_side": {
+          "type": "string",
+          "enum": ["BUY", "SELL", "PAIR", "HOLD"]
+        },
+        "time_horizon": {
+          "type": "string",
+          "enum": ["event_tactical", "swing", "core_position"]
+        },
+        "instrument_label": { "type": "string", "minLength": 1 },
+        "hedge_leg_note": { "type": "string", "minLength": 1 },
+        "position_context": { "type": "string", "minLength": 1 },
+        "quant_metric_budget": { "type": "integer", "minimum": 1 },
+        "allow_partial_metrics": { "type": "boolean" },
+        "force_breaking_news": { "type": "boolean" },
+        "scripted_pm_default": { "$ref": "#/$defs/preview" }
+      }
+    }
+  }
+}

@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic Trading Desk Wireframe</title>
+  <style>
+    :root {
+      --bg: #f5f5f2;
+      --panel: #fbfbf8;
+      --ink: #222;
+      --muted: #666;
+      --line: #999;
+      --heavy: #444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: repeating-linear-gradient(-45deg, #f5f5f2, #f5f5f2 12px, #f2f2ee 12px, #f2f2ee 24px);
+      color: var(--ink);
+    }
+    .page {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 18px;
+      display: grid;
+      grid-template-columns: 280px 1fr 320px;
+      gap: 14px;
+      min-height: 100vh;
+    }
+    .panel {
+      background: var(--panel);
+      border: 2px solid var(--line);
+      border-radius: 10px;
+      box-shadow: 3px 3px 0 rgba(0,0,0,.08);
+      padding: 12px;
+    }
+    .scribble { border-style: dashed; }
+    h1, h2, h3, p { margin: 0; }
+    .topline {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 10px;
+      border-bottom: 2px dotted var(--line);
+      margin-bottom: 12px;
+    }
+    .title { font-size: 24px; letter-spacing: .04em; }
+    .subtitle { color: var(--muted); font-size: 12px; margin-top: 6px; }
+    .stack { display: grid; gap: 10px; }
+    .chiprow { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      border: 1px solid var(--heavy);
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 11px;
+      background: #fff;
+    }
+    .chip.active { background: #e9e9e0; border-width: 2px; }
+    .chip.off { color: #888; text-decoration: line-through; }
+    .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+    .scenario {
+      border: 2px dashed var(--line);
+      padding: 10px;
+      border-radius: 8px;
+      background: #fff;
+    }
+    .scenario strong { display: block; margin-bottom: 6px; }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .flow div {
+      border: 2px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      background: white;
+      min-height: 62px;
+      font-size: 11px;
+    }
+    .flow .live { border-color: #222; background: #efefe7; }
+    .flow .done::after { content: " ✓"; }
+    .cards { display: grid; grid-template-columns: 1.1fr .9fr; gap: 12px; margin-top: 12px; }
+    .card { border: 2px solid var(--line); border-radius: 8px; padding: 10px; background: white; }
+    .bullets { margin-top: 8px; display: grid; gap: 6px; font-size: 13px; }
+    .bullet { border-left: 3px solid var(--line); padding-left: 8px; }
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .stance.bull { border-color: #5f5f5f; }
+    .stance.bear { border-color: #2c2c2c; }
+    .mini { font-size: 11px; color: var(--muted); }
+    .table {
+      margin-top: 8px;
+      border: 1px solid var(--line);
+    }
+    .row { display: grid; grid-template-columns: 1.2fr .8fr .8fr .8fr; }
+    .row div { padding: 6px 8px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); font-size: 12px; }
+    .row div:last-child { border-right: 0; }
+    .row.header { background: #efefe7; font-weight: 700; }
+    .transcript { display: grid; gap: 8px; margin-top: 10px; }
+    .msg { border-left: 3px solid var(--line); padding-left: 8px; font-size: 12px; }
+    .riskbox { border: 2px solid var(--heavy); padding: 10px; border-radius: 8px; background: #fafaf6; }
+    .decision { border: 3px solid #111; padding: 12px; border-radius: 10px; background: #fff; }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn {
+      padding: 8px 10px; border: 2px solid var(--heavy); border-radius: 8px; background: white; font-size: 12px;
+    }
+    .footer-note { margin-top: 10px; font-size: 11px; color: var(--muted); }
+    @media (max-width: 1100px) {
+      .page { grid-template-columns: 1fr; }
+      .cards, .split, .flow { grid-template-columns: 1fr; }
+      .row { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Rough sketch: optimize for trust, role clarity, and visible disagreement rather than polished finance UI tropes. -->
+  <div class="page">
+    <aside class="panel scribble stack">
+      <div>
+        <div class="section-title">Runtime</div>
+        <div class="chiprow" style="margin-top:8px">
+          <span class="chip active">WayFlow</span>
+          <span class="chip">LangGraph</span>
+        </div>
+      </div>
+      <div>
+        <div class="section-title">Scenario</div>
+        <div class="scenario" style="margin-top:8px">
+          <strong>Long NVDA into earnings?</strong>
+          PM wants: position recommendation by close.
+        </div>
+      </div>
+      <div>
+        <div class="section-title">Desk Seats</div>
+        <div class="chiprow" style="margin-top:8px">
+          <span class="chip active">Market</span>
+          <span class="chip active">News</span>
+          <span class="chip active">Social</span>
+          <span class="chip active">Fundamentals</span>
+          <span class="chip active">Bull</span>
+          <span class="chip active">Bear</span>
+          <span class="chip active">Aggressive</span>
+          <span class="chip active">Conservative</span>
+          <span class="chip active">Neutral</span>
+          <span class="chip active">Quant</span>
+          <span class="chip active">Macro</span>
+          <span class="chip off">Geopolitical</span>
+          <span class="chip active">Risk</span>
+          <span class="chip active">PM</span>
+          <span class="chip active">Trader</span>
+        </div>
+      </div>
+      <div>
+        <div class="section-title">Flow</div>
+        <div class="flow">
+          <div class="done">Gather<br><span class="mini">parallel analysts</span></div>
+          <div class="done">Debate<br><span class="mini">bull vs bear</span></div>
+          <div class="live">Quant<br><span class="mini">code + metrics</span></div>
+          <div>Research Mgr<br><span class="mini">synthesis</span></div>
+          <div>Risk / PM<br><span class="mini">human gate</span></div>
+          <div>Trader<br><span class="mini">ticket + monitor</span></div>
+        </div>
+      </div>
+      <div class="footer-note">Intentional roughness. The real product should keep this information structure, not this visual treatment.</div>
+    </aside>
+
+    <main class="panel stack">
+      <div class="topline">
+        <div>
+          <h1 class="title">AGENTIC TRADING DESK</h1>
+          <p class="subtitle">Investment committee simulator for professional buy-side teams</p>
+        </div>
+        <div class="toolbar">
+          <button class="btn">Pause Run</button>
+          <button class="btn">Swap Runtime</button>
+          <button class="btn">Edit Desk Seats</button>
+        </div>
+      </div>
+
+      <div class="cards">
+        <section class="card">
+          <div class="section-title">Why This Name Is Live</div>
+          <div class="bullets">
+            <div class="bullet">News Analyst: channel checks imply hyperscaler capex remains intact this quarter.</div>
+            <div class="bullet">Fundamentals Analyst: valuation rich, but estimate revision trend still positive.</div>
+            <div class="bullet">Macro Economist: rates volatility is the main cross-current, not end-demand.</div>
+            <div class="bullet">Social Analyst: retail sentiment overheated, useful contra signal, not primary thesis.</div>
+          </div>
+        </section>
+        <section class="card">
+          <div class="section-title">Quant Notebook</div>
+          <div class="mini" style="margin-top:8px">Visible code, visible output, no magic box.</div>
+          <pre style="font-size:11px; white-space:pre-wrap; margin-top:8px;">signal = momentum_20d * 0.35 + eps_revision * 0.40 - crowding * 0.25
+backtest_window = 3y daily
+result: hit_rate 58.2%, avg excess return +184bps</pre>
+          <div class="table">
+            <div class="row header"><div>Metric</div><div>Value</div><div>Direction</div><div>Confidence</div></div>
+            <div class="row"><div>20D momentum</div><div>+7.1%</div><div>positive</div><div>0.74</div></div>
+            <div class="row"><div>Earnings drift</div><div>+0.9 sigma</div><div>positive</div><div>0.66</div></div>
+            <div class="row"><div>Crowding</div><div>elevated</div><div>negative</div><div>0.59</div></div>
+          </div>
+        </section>
+      </div>
+
+      <div class="split">
+        <section class="card stance bull">
+          <div class="section-title">Bull Case</div>
+          <div class="bullets">
+            <div class="bullet">Secular AI demand still outruns supply.</div>
+            <div class="bullet">Estimate revisions and management tone stay aligned.</div>
+            <div class="bullet">Best risk/reward is sized starter position before catalyst.</div>
+          </div>
+        </section>
+        <section class="card stance bear">
+          <div class="section-title">Bear Case</div>
+          <div class="bullets">
+            <div class="bullet">Expectations already price in near-perfect execution.</div>
+            <div class="bullet">Crowded long into binary event.</div>
+            <div class="bullet">Better trade may be wait for post-earnings pullback.</div>
+          </div>
+        </section>
+      </div>
+
+      <section class="card">
+        <div class="section-title">Research Manager Synthesis</div>
+        <div class="bullets">
+          <div class="bullet">Base case: positive fundamental trend, but crowding compresses upside.</div>
+          <div class="bullet">Recommendation to PM: open half-size tactical long with explicit stop and post-earnings review.</div>
+          <div class="bullet">Open disagreement stays attached to the recommendation, not hidden in logs.</div>
+        </div>
+      </section>
+    </main>
+
+    <aside class="panel stack">
+      <div class="riskbox">
+        <div class="section-title">Risk Gate</div>
+        <div class="bullets" style="margin-top:8px">
+          <div class="bullet">Max position: 125 bps</div>
+          <div class="bullet">Event risk: HIGH</div>
+          <div class="bullet">Liquidity: acceptable</div>
+          <div class="bullet">Correlation with existing AI basket: elevated</div>
+        </div>
+      </div>
+      <div class="decision">
+        <div class="section-title">Portfolio Manager</div>
+        <p style="margin-top:8px; font-size:13px;">Approve 75 bps now. Add only if call confirms demand and gross exposure stays within limits.</p>
+        <div class="toolbar" style="margin-top:10px">
+          <button class="btn">Approve</button>
+          <button class="btn">Ask Follow-up</button>
+          <button class="btn">Reject</button>
+        </div>
+      </div>
+      <div>
+        <div class="section-title">Live Transcript</div>
+        <div class="transcript">
+          <div class="msg"><strong>09:31</strong> Quant Analyst running earnings-drift notebook...</div>
+          <div class="msg"><strong>09:32</strong> Bear Researcher flagged crowded positioning risk.</div>
+          <div class="msg"><strong>09:33</strong> Risk Manager requests tighter sizing due to correlation.</div>
+          <div class="msg"><strong>09:34</strong> PM asks: what changes if earnings beat but gross margin guide slips?</div>
+        </div>
+      </div>
+      <div class="footer-note">Key idea: every recommendation is backed by evidence, dissent, and a human decision point.</div>
+    </aside>
+  </div>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "schema_version": "v1",
+  "dataset_id": "thesis_break_monitoring_snow_v1",
+  "instrument": "SNOW",
+  "as_of": "2026-03-31T15:00:00Z",
+  "price_series": [188.4, 184.9, 181.0, 178.6, 176.2, 173.4, 170.8, 168.9, 165.7, 162.1],
+  "estimate_revisions_pct": [0.1, 0.0, -0.1, -0.2, -0.3, -0.4, -0.4, -0.5, -0.6, -0.7],
+  "volume_millions": [5.8, 6.0, 6.1, 6.4, 6.5, 6.8, 7.2, 7.4, 8.0, 8.6],
+  "ai_basket_correlation": 0.41,
+  "sentiment_score": 0.29,
+  "macro_risk": "moderate",
+  "news_items": [],
+  "fundamentals": {
+    "estimate_revision_trend": "negative",
+    "valuation_state": "still_expensive",
+    "gross_margin_watch": false,
+    "demand_signal": "softening"
+  },
+  "market_context": {
+    "momentum_20d_pct": -14.0,
+    "event_risk": "moderate",
+    "liquidity": "acceptable"
+  }
+}

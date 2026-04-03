@@ -1,0 +1,13 @@
+{
+  "schema_version": "v1",
+  "desk_id": "agentic_trading_desk",
+  "name": "Agentic Trading Desk",
+  "description": "Buy-side investment committee simulator with runtime portability.",
+  "flow_id": "investment_committee_v1",
+  "role_registry": "authoring/roles/roles.json",
+  "scenario_defaults": {
+    "demo_mode": true,
+    "primary_runtime": "wayflow",
+    "parity_runtime": "langgraph"
+  }
+}

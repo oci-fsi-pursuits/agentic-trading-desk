@@ -1,0 +1,45 @@
+{
+  "schema_version": "v1",
+  "scenario_id": "single_name_earnings",
+  "required_stage_sequence": [
+    "gather",
+    "quantify",
+    "debate",
+    "synthesize",
+    "risk_review",
+    "pm_review",
+    "trade_finalize",
+    "monitor",
+    "completed"
+  ],
+  "required_event_types": [
+    "run.started",
+    "stage.started",
+    "seat.activated",
+    "source.ingested",
+    "evidence.upserted",
+    "claim.upserted",
+    "metric.upserted",
+    "artifact.created",
+    "approval.requested",
+    "approval.resolved",
+    "ticket.updated",
+    "stage.completed",
+    "run.completed"
+  ],
+  "required_object_types": [
+    "source",
+    "evidence",
+    "claim",
+    "metric",
+    "artifact",
+    "constraint",
+    "decision",
+    "trade_ticket"
+  ],
+  "required_artifact_types": [
+    "notebook",
+    "summary_memo",
+    "trade_ticket"
+  ]
+}

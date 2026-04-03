@@ -1,0 +1,118 @@
+{
+  "schema_version": "v2",
+  "scenario_id": "sector_pair_trade_committee",
+  "name": "Sector Pair Trade Committee",
+  "summary": "Evaluate a relative-value AI infrastructure pair: long NVDA versus short AMD with explicit hedge and correlation controls.",
+  "instrument": "NVDA",
+  "instrument_universe": ["NVDA", "AMD"],
+  "instrument_label": "NVDA/AMD",
+  "pair_peer": "AMD",
+  "primary_runtime": "wayflow",
+  "parity_runtime": "langgraph",
+  "thesis_prompt": "Determine whether the fund should run a market-aware pair trade, long NVDA versus short AMD, based on relative revisions, positioning, and risk-adjusted spread opportunity.",
+  "decision_question": "Should the desk put on a relative-value AI pair trade, or stay neutral?",
+  "scenario_type": "relative_value_pair",
+  "starting_position_state": {
+    "stance": "neutral",
+    "position_action": "defer",
+    "size_bps": 0,
+    "existing_position": false
+  },
+  "allowed_end_states": {
+    "stances": ["long", "neutral"],
+    "actions": ["initiate", "defer"]
+  },
+  "seat_plan": {
+    "required": [
+      "market_analyst",
+      "news_analyst",
+      "fundamentals_analyst",
+      "bull_researcher",
+      "bear_researcher",
+      "research_manager",
+      "quant_analyst",
+      "risk_manager",
+      "portfolio_manager",
+      "trader",
+      "macro_economist"
+    ],
+    "optional": [
+      "geopolitical_analyst",
+      "aggressive_analyst",
+      "conservative_analyst",
+      "neutral_analyst"
+    ],
+    "scenario_overrides": {
+      "prefer_enabled": ["macro_economist", "conservative_analyst"],
+      "suppress": ["social_analyst"]
+    }
+  },
+  "branch_conditions": {
+    "force_breaking_news": false,
+    "requires_news_confirmation": false,
+    "pair_trade_mode": true,
+    "thesis_break_mode": false,
+    "prefer_enabled": ["macro_economist", "conservative_analyst"],
+    "suppress_seats": ["social_analyst"]
+  },
+  "pm_decision_policy": {
+    "signal_bias": 0.45,
+    "long_signal_threshold": 3.8,
+    "short_signal_threshold": -99.0,
+    "neutral_vote_band": 1,
+    "warning_size_multiplier": 0.8,
+    "allow_short": false,
+    "size_ranges_bps": {
+      "long": [60, 90],
+      "neutral": [0, 0]
+    },
+    "action_map": {
+      "long": "initiate",
+      "neutral": "defer"
+    },
+    "preview": {
+      "outcome": "approved_with_changes",
+      "position_size_bps": "60-90",
+      "approval_notes": "Run only with balanced legs, borrow confirmed, and spread discipline."
+    }
+  },
+  "constraints": [
+    {
+      "constraint_id": "gross_leg_bps",
+      "constraint_type": "position_limit",
+      "label": "Gross exposure per leg",
+      "value": 90,
+      "severity": "blocking"
+    },
+    {
+      "constraint_id": "pair_beta_neutrality",
+      "constraint_type": "correlation",
+      "label": "Pair must remain beta-aware and spread-driven",
+      "value": "required",
+      "severity": "blocking"
+    },
+    {
+      "constraint_id": "borrow_check",
+      "constraint_type": "mandate",
+      "label": "Short leg borrow and locate must be available",
+      "value": "required",
+      "severity": "blocking"
+    },
+    {
+      "constraint_id": "liquidity_check",
+      "constraint_type": "liquidity",
+      "label": "Both legs must clear liquidity thresholds",
+      "value": "required",
+      "severity": "blocking"
+    }
+  ],
+  "demo_mode": {
+    "trade_side": "BUY",
+    "time_horizon": "swing",
+    "instrument_label": "NVDA/AMD",
+    "hedge_leg_note": "short_amd_leg_required",
+    "position_context": "Relative-value pair trade rather than outright market-direction expression.",
+    "quant_metric_budget": 3,
+    "allow_partial_metrics": true
+  }
+}

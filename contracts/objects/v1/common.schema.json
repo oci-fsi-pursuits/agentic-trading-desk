@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/objects/v1/common.schema.json",
+  "title": "Common Object Definitions",
+  "$defs": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "v1"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_\\-.]*$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "roleId": {
+      "type": "string",
+      "enum": [
+        "market_analyst",
+        "social_analyst",
+        "news_analyst",
+        "fundamentals_analyst",
+        "bull_researcher",
+        "bear_researcher",
+        "aggressive_analyst",
+        "conservative_analyst",
+        "neutral_analyst",
+        "research_manager",
+        "quant_analyst",
+        "macro_economist",
+        "geopolitical_analyst",
+        "risk_manager",
+        "portfolio_manager",
+        "trader"
+      ]
+    },
+    "stageId": {
+      "type": "string",
+      "enum": [
+        "gather",
+        "debate",
+        "quantify",
+        "synthesize",
+        "risk_review",
+        "pm_review",
+        "trade_finalize",
+        "monitor",
+        "completed",
+        "failed"
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "stage_id", "producer_role", "emitted_at"],
+      "properties": {
+        "run_id": {"$ref": "#/$defs/identifier"},
+        "stage_id": {"$ref": "#/$defs/stageId"},
+        "producer_role": {"$ref": "#/$defs/roleId"},
+        "tool_name": {"type": "string"},
+        "dataset_refs": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": []
+        },
+        "emitted_at": {"$ref": "#/$defs/timestamp"}
+      }
+    },
+    "tag": {
+      "type": "string",
+      "enum": [
+        "fundamentals",
+        "earnings",
+        "macro",
+        "sentiment",
+        "positioning",
+        "risk",
+        "valuation",
+        "liquidity",
+        "event",
+        "thesis",
+        "geopolitics"
+      ]
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/objects/v1/source.schema.json",
+  "title": "Source",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source_id", "source_type", "title", "content", "provenance", "freshness"],
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schemaVersion"},
+    "source_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "source_type": {"type": "string", "enum": ["market_data", "news", "social", "fundamentals", "macro", "geopolitical", "internal_note"]},
+    "title": {"type": "string", "minLength": 1},
+    "content": {"type": "string", "minLength": 1},
+    "uri": {"type": "string"},
+    "freshness": {"type": "string", "enum": ["live", "delayed", "snapshot", "historical"]},
+    "provenance": {"$ref": "common.schema.json#/$defs/provenance"}
+  }
+}

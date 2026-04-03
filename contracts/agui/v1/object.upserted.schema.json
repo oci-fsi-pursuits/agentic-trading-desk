@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/agui/v1/object.upserted.schema.json",
+  "allOf": [
+    {"$ref": "common.schema.json#/$defs/baseEnvelope"},
+    {
+      "properties": {
+        "event_type": {"enum": ["evidence.upserted", "claim.upserted", "metric.upserted"]},
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["object_id", "object_type"],
+          "properties": {
+            "object_id": {"type": "string"},
+            "object_type": {"type": "string", "enum": ["evidence", "claim", "metric"]}
+          }
+        }
+      }
+    }
+  ]
+}

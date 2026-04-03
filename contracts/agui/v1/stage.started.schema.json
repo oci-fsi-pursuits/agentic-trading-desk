@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/agui/v1/stage.started.schema.json",
+  "allOf": [
+    {"$ref": "common.schema.json#/$defs/baseEnvelope"},
+    {
+      "properties": {
+        "event_type": {"const": "stage.started"},
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["timeout_s"],
+          "properties": {
+            "timeout_s": {"type": "integer", "minimum": 1}
+          }
+        }
+      }
+    }
+  ]
+}

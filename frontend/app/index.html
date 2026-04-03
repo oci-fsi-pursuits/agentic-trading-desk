@@ -1,0 +1,1810 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agentic Trading Desk</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --ink: #172033;
+      --muted: #5a667d;
+      --line: #d9e0ea;
+      --accent: #0f5cc0;
+      --accent-soft: #deebff;
+      --bull: #0f7b41;
+      --bear: #b23333;
+      --neutral: #6b7280;
+      --risk: #8e4b00;
+      --shadow: 0 16px 40px rgba(8, 23, 53, 0.08);
+      --primary-panel-bg: linear-gradient(180deg, #fafdff 0%, #f1f6ff 100%);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "IBM Plex Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 15% -20%, #dbe8ff 0%, rgba(219,232,255,0) 45%),
+        radial-gradient(circle at 90% 0%, #eef5ff 0%, rgba(238,245,255,0) 48%),
+        linear-gradient(180deg, #f8fbff 0%, #f2f6fb 100%);
+      min-height: 100vh;
+      line-height: 1.45;
+      overflow-x: hidden;
+    }
+
+    header {
+      padding: 16px 20px 14px;
+      border-bottom: 1px solid #d3dcea;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(6px);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      letter-spacing: 0.02em;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .header-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-start;
+      gap: 12px;
+    }
+
+    .top-bar {
+      margin-top: 12px;
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .top-bar-main {
+      display: grid;
+      grid-template-columns: minmax(220px, 320px) minmax(140px, 180px);
+      gap: 10px 12px;
+      flex: 1 1 480px;
+    }
+
+    .top-bar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-left: auto;
+    }
+
+    .controls {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(140px, 1fr));
+      gap: 10px 12px;
+      align-items: end;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    select,
+    input,
+    button {
+      font: inherit;
+      font-size: 14px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--ink);
+      padding: 11px 12px;
+      min-height: 44px;
+    }
+
+    input:focus,
+    select:focus,
+    button:focus {
+      outline: 2px solid rgba(15, 92, 192, 0.25);
+      outline-offset: 1px;
+    }
+
+    button {
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .utility-toggle {
+      min-height: 42px;
+      border-radius: 999px;
+      border-color: #bed0ea;
+      background: #f6f9ff;
+      color: #29496f;
+      padding: 10px 14px;
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .utility-toggle[aria-expanded="true"] {
+      border-color: #8eb4eb;
+      background: #eaf3ff;
+      color: #0f5cc0;
+    }
+
+    #load-run-btn,
+    #refresh-audit-btn,
+    .phase-start-btn {
+      background: linear-gradient(180deg, #f8fbff 0%, #eaf1fb 100%);
+      border-color: #b9c8df;
+      color: #274264;
+    }
+
+    #load-run-btn {
+      width: 100%;
+      justify-self: start;
+    }
+
+    .utility-action-row #load-run-btn {
+      width: auto;
+    }
+
+    .phase-start-btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.62;
+    }
+
+    .status,
+    .gate-line,
+    .llm-line {
+      margin-top: 8px;
+      border: 1px solid #cbd9ee;
+      border-radius: 10px;
+      background: #f5f9ff;
+      color: #2e4669;
+      font-size: 12px;
+      line-height: 1.4;
+      padding: 8px 10px;
+    }
+
+    .status {
+      border-color: #b7cae4;
+      background: #f4f8ff;
+    }
+
+    .status[data-level="error"] {
+      border-color: #e2b8b8;
+      background: #fff4f4;
+      color: #7f2f2f;
+    }
+
+    .gate-line {
+      border-color: #cfddf0;
+      background: #f7faff;
+    }
+
+    .shell {
+      display: grid;
+      gap: 14px;
+      padding: 16px 20px 20px;
+    }
+
+    .utility-drawer {
+      margin-top: 12px;
+      border: 1px solid #d5deeb;
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(252, 254, 255, 0.98) 0%, rgba(244, 248, 255, 0.98) 100%);
+      box-shadow: 0 16px 38px rgba(10, 28, 60, 0.08);
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .utility-drawer[hidden] {
+      display: none;
+    }
+
+    .utility-drawer-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .utility-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: start;
+    }
+
+    .utility-panel {
+      padding: 12px;
+    }
+
+    .utility-action-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .utility-meta-grid {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 10px;
+    }
+
+    .exec-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 13px;
+      box-shadow: var(--shadow);
+    }
+
+    .exec-card.exec-primary {
+      border-color: #a8c4eb;
+      background: var(--primary-panel-bg);
+    }
+
+    .exec-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    .exec-value {
+      font-size: 30px;
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+    }
+
+    .exec-meta {
+      margin-top: 4px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .price-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 2px;
+    }
+
+    .price-head-right {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: auto;
+    }
+
+    #stock-price-value {
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -0.01em;
+      color: #17294a;
+    }
+
+    #stock-price-change {
+      font-size: 13px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid #cdd8ea;
+      background: #f7faff;
+      color: #385275;
+      white-space: nowrap;
+    }
+
+    #stock-price-change.up {
+      color: #0f7b41;
+      border-color: #9bcfa9;
+      background: #eef9f1;
+    }
+
+    #stock-price-change.down {
+      color: #b23333;
+      border-color: #e0b2b2;
+      background: #fff2f2;
+    }
+
+    .timeframe-select {
+      min-height: 28px;
+      border-radius: 8px;
+      border: 1px solid #c7d5ea;
+      background: #f8fbff;
+      color: #345275;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      min-width: 64px;
+    }
+
+    .price-chart-wrap {
+      margin-top: 8px;
+      border: 1px solid #cdd9eb;
+      border-radius: 10px;
+      background: linear-gradient(180deg, #fcfeff 0%, #f3f8ff 100%);
+      padding: 6px 7px 5px;
+      height: 132px;
+    }
+
+    #stock-price-chart {
+      width: 100%;
+      height: 118px;
+      display: block;
+    }
+
+    .chart-axis-line {
+      stroke: #d5deeb;
+      stroke-width: 1;
+    }
+
+    .chart-price-line {
+      fill: none;
+      stroke: #1d63c6;
+      stroke-width: 2.2;
+    }
+
+    .chart-trend-long {
+      fill: none;
+      stroke: #2d6a4f;
+      stroke-width: 1.7;
+      stroke-dasharray: 5 4;
+    }
+
+    .chart-trend-short {
+      fill: none;
+      stroke: #b45309;
+      stroke-width: 1.6;
+      stroke-dasharray: 3 3;
+    }
+
+    #stock-chart-status {
+      margin-top: 6px;
+    }
+
+    .vote-pills {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .vote-pill {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 6px 7px;
+      background: #fbfdff;
+      display: grid;
+      gap: 2px;
+      text-align: center;
+    }
+
+    .vote-pill .label {
+      font-size: 10px;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .vote-pill .count {
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .vote-pill.long {
+      border-color: #9bcfa9;
+      background: #eef9f1;
+      color: #0f7b41;
+    }
+
+    .vote-pill.neutral {
+      border-color: #cfd5de;
+      background: #f5f7fa;
+      color: #5f6978;
+    }
+
+    .vote-pill.short {
+      border-color: #e0b2b2;
+      background: #fff2f2;
+      color: #b23333;
+    }
+
+    .main-grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) minmax(260px, 320px);
+      align-items: start;
+    }
+
+    .main-grid > * {
+      min-width: 0;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 8px 18px rgba(12, 34, 70, 0.05);
+      padding: 14px;
+    }
+
+    .panel-primary {
+      border-color: #a8c4eb;
+      background: var(--primary-panel-bg);
+      box-shadow: 0 12px 24px rgba(16, 55, 112, 0.09);
+    }
+
+    .stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .phase-shell {
+      display: grid;
+      gap: 10px;
+      padding: 12px 14px;
+    }
+
+    .phase-shell-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .phase-shell-meta {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .phase-tab-row {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(140px, 1fr));
+      gap: 8px;
+    }
+
+    .phase-tab {
+      border: 1px solid #cedbf0;
+      border-radius: 12px;
+      background: #f7fbff;
+      color: #2f4d74;
+      min-height: 68px;
+      padding: 10px 12px 9px;
+      text-align: left;
+      display: grid;
+      gap: 3px;
+      transition: background-color 130ms ease, border-color 130ms ease;
+      position: relative;
+    }
+
+    .phase-tab-select {
+      border: 0;
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      min-height: 0;
+      text-align: left;
+      display: grid;
+      gap: 3px;
+      cursor: pointer;
+      padding-right: 64px;
+    }
+
+    .phase-tab-cta {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      min-height: 24px;
+      min-width: 54px;
+      max-width: 64px;
+      border-radius: 999px;
+      border: 1px solid #bfd1ea;
+      background: #fbfdff;
+      color: #375880;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 700;
+      padding: 3px 8px;
+      box-shadow: none;
+    }
+
+    .phase-tab-cta:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .phase-tab .name {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      line-height: 1.2;
+    }
+
+    .phase-tab .state {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #4f698d;
+      font-weight: 700;
+    }
+
+    .phase-tab.active {
+      border-color: #8ab2ef;
+      background: #eaf3ff;
+      box-shadow: 0 0 0 1px rgba(27, 107, 213, 0.15) inset;
+    }
+
+    .phase-tab.done .state {
+      color: #0f7b41;
+    }
+
+    .phase-tab.running .state {
+      color: #0f5cc0;
+    }
+
+    .phase-tab.locked {
+      background: #f8fafd;
+      border-color: #d7e0eb;
+      color: #6d7890;
+      opacity: 0.85;
+    }
+
+    .phase-global-row {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+    }
+
+    .phase-global-card {
+      border: 1px solid #d2deef;
+      border-radius: 10px;
+      background: #fbfdff;
+      padding: 8px 9px;
+      display: grid;
+      gap: 3px;
+    }
+
+    .phase-global-card .k {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .phase-global-card .v {
+      font-size: 14px;
+      color: #20395d;
+      font-weight: 700;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .phase-global-card .meta {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .vote-trend-card {
+      gap: 6px;
+    }
+
+    .vote-trend-card .vote-pills {
+      margin-top: 0;
+    }
+
+    .phase-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    #phase-follow-live-btn {
+      min-height: 40px;
+      border-radius: 10px;
+      border: 1px solid #c9d7eb;
+      background: #f8fbff;
+      color: #355680;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 8px 11px;
+      display: none;
+    }
+
+    .section-title {
+      font-size: 13px;
+      text-transform: none;
+      letter-spacing: 0.01em;
+      color: #2a3a58;
+      margin-bottom: 7px;
+      font-weight: 700;
+    }
+
+    .section-subtitle {
+      margin: -2px 0 9px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .flow-item {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #f9fbff;
+      padding: 9px 10px 9px 12px;
+      display: grid;
+      gap: 2px;
+      transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .flow-item::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: #c9d4e6;
+    }
+
+    .flow-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .flow-item .label {
+      font-size: 15px;
+      font-weight: 600;
+      text-transform: capitalize;
+    }
+
+    .flow-item .meta {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .flow-item .purpose {
+      font-size: 12px;
+      color: #31445f;
+      line-height: 1.35;
+      margin-top: 4px;
+    }
+
+    .phase-cta-wrap {
+      margin-top: 8px;
+    }
+
+    .phase-start-btn {
+      width: 100%;
+      min-height: 44px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .phase-start-btn.running {
+      border-color: #8ab2ef;
+      background: #eaf3ff;
+      color: #0f5cc0;
+    }
+
+    .state-badge {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-radius: 999px;
+      padding: 2px 7px;
+      border: 1px solid #c9d4e6;
+      background: #f4f7fc;
+      color: #3e5271;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .state-badge.active {
+      border-color: #8ab2ef;
+      color: #0f5cc0;
+      background: #eaf3ff;
+    }
+
+    .state-badge.done {
+      border-color: #9dc8a8;
+      color: #0f7b41;
+      background: #edf8f1;
+    }
+
+    .state-badge.locked {
+      border-color: #d5dde9;
+      color: #687489;
+      background: #f6f8fb;
+    }
+
+    .state-badge.partial {
+      border-color: #b9cbe5;
+      color: #375780;
+      background: #eef4fd;
+    }
+
+    .flow-item.active {
+      border-color: #8ab2ef;
+      background: #ecf3ff;
+      transform: translateX(2px);
+      animation: flowPulse 1.5s ease-in-out infinite;
+    }
+
+    .flow-item.active::after { background: #1c6bd0; }
+
+    .flow-item.done {
+      border-color: #b7d3be;
+      background: #f1faf3;
+    }
+    .flow-item.done::after { background: #3d985d; }
+
+    .flow-item.partial {
+      border-color: #c2d0e4;
+      background: #f5f8fd;
+    }
+    .flow-item.partial::after { background: #7ca2d8; }
+
+    .flow-item.locked {
+      border-color: #d8e0eb;
+      background: #f8fafd;
+      opacity: 0.9;
+    }
+    .flow-item.locked::after { background: #cfd8e6; }
+
+    @keyframes flowPulse {
+      0% { box-shadow: 0 0 0 rgba(27, 107, 213, 0); }
+      50% { box-shadow: 0 0 0 2px rgba(27, 107, 213, 0.18); }
+      100% { box-shadow: 0 0 0 rgba(27, 107, 213, 0); }
+    }
+
+    .seat-grid {
+      display: grid;
+      gap: 6px;
+      max-height: 220px;
+      overflow: auto;
+    }
+
+    .scenario-brief {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfdff;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .scenario-brief-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: baseline;
+      flex-wrap: wrap;
+    }
+
+    .scenario-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1f3558;
+      line-height: 1.35;
+    }
+
+    .scenario-runtime {
+      border: 1px solid #bed0ea;
+      border-radius: 999px;
+      background: #eef5ff;
+      color: #2b4e7a;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 700;
+      padding: 2px 8px;
+      white-space: nowrap;
+    }
+
+    .scenario-summary,
+    .scenario-thesis {
+      margin: 0;
+      font-size: 13px;
+      color: #2b3c5a;
+      line-height: 1.45;
+    }
+
+    .scenario-metrics {
+      display: grid;
+      gap: 6px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .scenario-metric {
+      border: 1px solid #d5e0ef;
+      border-radius: 10px;
+      background: #f7faff;
+      padding: 7px 8px;
+    }
+
+    .scenario-metric .k {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .scenario-metric .v {
+      margin-top: 2px;
+      font-size: 13px;
+      color: #20365a;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .scenario-pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .scenario-pill {
+      border: 1px solid #cad8ec;
+      border-radius: 999px;
+      background: #f4f8ff;
+      color: #355680;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 700;
+      padding: 2px 7px;
+    }
+
+    .scenario-pill.warning {
+      border-color: #dbc29a;
+      background: #fff8ea;
+      color: #7a541c;
+    }
+
+    .scenario-pill.blocking {
+      border-color: #e0b2b2;
+      background: #fff1f1;
+      color: #8d3030;
+    }
+
+    .scenario-constraints {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 4px;
+      font-size: 12px;
+      color: #2a3750;
+    }
+
+    .seat-chip {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #f7faff;
+      padding: 10px 11px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .seat-chip input {
+      width: 20px;
+      height: 20px;
+      accent-color: var(--accent);
+    }
+
+    .seat-chip-disabled {
+      opacity: 0.72;
+      background: #f3f5f8;
+      border-style: dashed;
+    }
+
+    .mid-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1.2fr 0.8fr;
+      align-items: start;
+    }
+
+    .agent-grid {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(2, minmax(220px, 1fr));
+    }
+
+    .agent-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfcff;
+      padding: 10px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .agent-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .agent-role {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .lean {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      padding: 2px 7px;
+      border-radius: 999px;
+      border: 1px solid;
+    }
+
+    .lean.long { color: var(--bull); border-color: #8ac6a1; background: #eaf7ef; }
+    .lean.short { color: var(--bear); border-color: #e4aaaa; background: #ffefef; }
+    .lean.neutral { color: var(--neutral); border-color: #cfd5de; background: #f3f5f8; }
+
+    .agent-meta {
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .agent-text {
+      font-size: 14px;
+      color: #25324b;
+      line-height: 1.5;
+      min-height: 32px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .consensus-score {
+      font-size: 30px;
+      font-weight: 700;
+      margin: 2px 0 8px;
+    }
+
+    .spark-wrap {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #f9fbff;
+      height: 110px;
+      padding: 6px;
+    }
+
+    #consensus-sparkline { width: 100%; height: 92px; }
+
+    .mini-list {
+      display: grid;
+      gap: 6px;
+      max-height: 150px;
+      overflow: auto;
+      margin-top: 8px;
+    }
+
+    .mini-item {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 7px 8px;
+      font-size: 12px;
+      background: #fcfdff;
+    }
+
+    .handoff-list {
+      display: grid;
+      gap: 7px;
+      max-height: 170px;
+      overflow: auto;
+    }
+
+    .handoff-item {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 7px 8px;
+      background: #fcfdff;
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .dialogue-stream {
+      display: grid;
+      gap: 10px;
+    }
+
+    .dialogue-exchange {
+      border: 1px solid #b8c9e4;
+      border-radius: 12px;
+      padding: 10px;
+      background: linear-gradient(180deg, #fbfdff 0%, #f1f6ff 100%);
+      display: grid;
+      gap: 8px;
+    }
+
+    .exchange-meta {
+      font-size: 12px;
+      color: #3f5678;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .speech-block {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: white;
+      padding: 10px;
+      display: grid;
+      gap: 6px;
+      font-size: 14px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .speech-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .speaker-pill {
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      border: 1px solid #9cb8de;
+      color: #204a7c;
+      background: #eff5ff;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-weight: 700;
+    }
+
+    .speech-arrow {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #35557e;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .live-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #8ab2ef;
+      background: #e9f2ff;
+      color: #0f5cc0;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-right: 8px;
+      animation: livePulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes livePulse {
+      0% { opacity: 0.75; }
+      50% { opacity: 1; }
+      100% { opacity: 0.75; }
+    }
+
+    .mini-item .meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    .risk-status {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--risk);
+    }
+
+    .constraint-item {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      margin-bottom: 6px;
+      background: #fffdf8;
+      font-size: 12px;
+    }
+
+    .phase-note-meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .phase-note {
+      border: 1px solid #c8d9f2;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #fafdff 0%, #f0f6ff 100%);
+      padding: 10px 11px;
+      font-size: 14px;
+      color: #25324b;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      min-height: 56px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .phase-note-grid {
+      border: 1px solid #c8d9f2;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #fafdff 0%, #f0f6ff 100%);
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .phase-note-columns {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .phase-note-block {
+      border: 1px solid #d3e1f4;
+      border-radius: 10px;
+      background: #ffffff;
+      padding: 8px 9px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .phase-note-k {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .phase-note-v {
+      font-size: 13px;
+      color: #233a5d;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .phase-note-list {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 4px;
+      font-size: 12px;
+      color: #2a3750;
+    }
+
+    .decision-panel {
+      border: 1px solid #c8d9f2;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #fafdff 0%, #f0f6ff 100%);
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .outcome-banner {
+      border: 1px solid #c6d5eb;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #fbfdff 0%, #f3f7fe 100%);
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .outcome-banner.good {
+      border-color: #9ec9aa;
+      background: linear-gradient(180deg, #f8fff9 0%, #edf9ef 100%);
+    }
+
+    .outcome-banner.warning {
+      border-color: #d9c49f;
+      background: linear-gradient(180deg, #fffdf8 0%, #faf4e8 100%);
+    }
+
+    .outcome-banner.blocked {
+      border-color: #dba3a3;
+      background: linear-gradient(180deg, #fff9f9 0%, #faeeee 100%);
+    }
+
+    .outcome-title {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .outcome-meta {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .decision-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .decision-title {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .decision-pill {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 700;
+      border-radius: 999px;
+      padding: 3px 8px;
+      border: 1px solid #9fb9df;
+      background: white;
+      color: #22476f;
+    }
+
+    .decision-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(120px, 1fr));
+      gap: 8px;
+    }
+
+    .decision-metric {
+      background: white;
+      border: 1px solid #d5e2f4;
+      border-radius: 10px;
+      padding: 7px 8px;
+    }
+
+    .decision-metric .k {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .decision-metric .v {
+      margin-top: 3px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .action-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .action-btn {
+      border: 1px solid #b7cae4;
+      border-radius: 10px;
+      background: white;
+      color: #274264;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 8px;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .action-btn:hover {
+      border-color: #8fb1dd;
+      background: #f4f8ff;
+    }
+
+    .columns-2 {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 4px;
+      font-size: 12px;
+      color: #2a3750;
+    }
+
+    .ticket-box,
+    .metric-box,
+    .evidence-box {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfdff;
+      padding: 10px;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 8px;
+      max-height: 290px;
+      overflow: auto;
+    }
+
+    .event {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fcfdff;
+      padding: 8px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .event strong { font-size: 13px; }
+    .event .meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    .audit-timeline {
+      max-height: 220px;
+      overflow: auto;
+      display: grid;
+      gap: 8px;
+    }
+
+    .mono {
+      font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+      font-size: 11px;
+      color: #3f4d68;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .llm-line {
+      border-color: #d6ddea;
+      background: #f9fbff;
+      color: #485a78;
+      font-size: 11px;
+    }
+
+    .exposure-grid {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .exposure-item {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      background: #fcfdff;
+    }
+
+    .exposure-item .k {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .exposure-item .v {
+      margin-top: 2px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    @media (max-width: 1180px) {
+      .controls { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
+      .main-grid { grid-template-columns: 1fr; }
+      .phase-tab-row { grid-template-columns: 1fr 1fr; }
+      .phase-global-row { grid-template-columns: 1fr 1fr; }
+      .utility-grid { grid-template-columns: 1fr; }
+      .utility-meta-grid { grid-template-columns: 1fr 1fr; }
+      .mid-grid { grid-template-columns: 1fr; }
+      .agent-grid { grid-template-columns: 1fr; }
+      .decision-grid { grid-template-columns: 1fr 1fr; }
+      .columns-2 { grid-template-columns: 1fr; }
+      .action-grid { grid-template-columns: 1fr; }
+      .exposure-grid { grid-template-columns: 1fr; }
+      .scenario-metrics { grid-template-columns: 1fr; }
+      .phase-note-columns { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 900px) {
+      header {
+        position: static;
+      }
+
+      .header-top {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .shell {
+        padding: 14px 14px 16px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .top-bar-main {
+        grid-template-columns: 1fr;
+      }
+
+      .top-bar-actions {
+        margin-left: 0;
+      }
+
+      .utility-meta-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      h1 {
+        font-size: 30px;
+      }
+
+      .subtitle {
+        font-size: 13px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .utility-action-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .panel {
+        padding: 12px;
+      }
+
+      .agent-role {
+        font-size: 18px;
+      }
+
+      .agent-text,
+      .speech-block {
+        font-size: 15px;
+      }
+    }
+  </style>
+</head>
+  <body>
+  <header>
+    <div class="header-top">
+      <div>
+        <h1>Agentic Trading Desk</h1>
+        <p class="subtitle">Business-facing committee view, with operator controls tucked away.</p>
+      </div>
+    </div>
+
+    <div class="top-bar">
+      <div class="top-bar-main">
+        <label>Scenario
+          <select id="scenario"></select>
+        </label>
+        <label>Ticker
+          <input id="ticker" type="text" value="" placeholder="Enter ticker (e.g., NVDA)" />
+        </label>
+      </div>
+      <div class="top-bar-actions">
+        <button id="demo-controls-toggle" class="utility-toggle" type="button" aria-expanded="false" aria-controls="demo-controls-drawer">Demo Controls</button>
+        <button id="diagnostics-toggle" class="utility-toggle" type="button" aria-expanded="false" aria-controls="diagnostics-drawer">Diagnostics</button>
+      </div>
+    </div>
+
+    <section id="demo-controls-drawer" class="utility-drawer" hidden>
+      <div class="utility-drawer-head">
+        <div>
+          <div class="section-title" style="margin-bottom:0;">Demo Controls</div>
+          <div class="section-subtitle">Simulation knobs and operator actions stay here, not on the business surface.</div>
+        </div>
+      </div>
+      <div class="utility-grid">
+        <article class="panel utility-panel">
+          <div class="section-title">Run Controls</div>
+          <div class="controls" id="top-controls">
+            <label>Breaking News
+              <select id="breaking-news">
+                <option value="0" selected>Off</option>
+                <option value="1">Simulate Reroute</option>
+              </select>
+            </label>
+            <label>Debate Depth
+              <select id="debate-depth">
+                <option value="1">1 round</option>
+                <option value="2">2 rounds</option>
+                <option value="3" selected>3 rounds</option>
+                <option value="4">4 rounds</option>
+                <option value="5">5 rounds</option>
+                <option value="6">6 rounds</option>
+                <option value="7">7 rounds</option>
+                <option value="8">8 rounds</option>
+              </select>
+            </label>
+            <label>Replay
+              <select id="replay-run">
+                <option value="">Recent runs...</option>
+              </select>
+            </label>
+            <label>Runtime
+              <select id="runtime">
+                <option value="wayflow">WayFlow</option>
+                <option value="langgraph">LangGraph</option>
+              </select>
+            </label>
+          </div>
+          <div class="utility-action-row">
+            <button id="load-run-btn">Load Replay</button>
+            <button id="phase-follow-live-btn" type="button">Follow Live Phase</button>
+            <button id="reset-flow-btn" type="button">Reset</button>
+          </div>
+          <div class="phase-shell-meta" id="phase-progress-line">Phase 0 of 5 · Waiting to run.</div>
+          <div class="utility-meta-grid">
+            <div class="phase-global-card">
+              <div class="k">Current Phase</div>
+              <div class="v" id="phase-current">Waiting</div>
+            </div>
+            <div class="phase-global-card">
+              <div class="k">Runtime</div>
+              <div class="v" id="phase-runtime">N/A</div>
+            </div>
+            <div class="phase-global-card">
+              <div class="k">Run ID</div>
+              <div class="v" id="phase-run-id">Not started</div>
+            </div>
+          </div>
+        </article>
+        <article class="panel utility-panel">
+          <div class="section-title">Desk Seats</div>
+          <div class="section-subtitle" id="seat-editor-mode">Operator seat selection lives here.</div>
+          <div class="section-subtitle" id="run-roster-summary">Run roster will appear here after run start.</div>
+          <div class="seat-grid" id="required-seats"></div>
+          <div class="section-title" style="margin-top:10px;">Optional</div>
+          <div class="seat-grid" id="optional-seats"></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="diagnostics-drawer" class="utility-drawer" hidden>
+      <div class="utility-drawer-head">
+        <div>
+          <div class="section-title" style="margin-bottom:0;">Diagnostics</div>
+          <div class="section-subtitle">Audit, transcript, and simulator state for operators and solution engineers.</div>
+        </div>
+      </div>
+      <div class="status" id="status" aria-live="polite" data-level="info">Idle</div>
+      <div class="gate-line" id="stage-gate-status" aria-live="polite">Stage gate is armed. Start phase 1 from demo controls.</div>
+      <div class="llm-line" id="llm-status" aria-live="polite">LLM diagnostics unavailable.</div>
+      <div class="utility-grid">
+        <article class="panel utility-panel">
+          <div class="section-title">Live Agent Handoffs</div>
+          <div class="handoff-list" id="handoffs"></div>
+        </article>
+        <article class="panel utility-panel">
+          <div class="section-title">Live Transcript</div>
+          <div class="timeline" id="events"></div>
+        </article>
+        <article class="panel utility-panel">
+          <div class="section-title">Audit Trail</div>
+          <button id="refresh-audit-btn">Refresh Audit</button>
+          <div class="audit-timeline" id="audit"></div>
+        </article>
+      </div>
+    </section>
+  </header>
+
+  <main class="shell">
+    <section class="panel panel-primary phase-shell">
+      <div class="phase-shell-head">
+        <div class="section-title" style="margin-bottom:0;">Committee View</div>
+        <div class="phase-shell-meta" id="business-status-line">Select a scenario to start the desk review.</div>
+      </div>
+      <div class="phase-global-row">
+        <div class="phase-global-card">
+          <div class="k">Desk View</div>
+          <div class="v" id="exec-consensus">Neutral</div>
+          <div class="meta" id="exec-consensus-meta">Committee view is still forming.</div>
+        </div>
+        <div class="phase-global-card">
+          <div class="k">Risk Status</div>
+          <div class="v" id="business-risk">Pending</div>
+          <div class="meta" id="business-risk-meta">Constraints have not been reviewed yet.</div>
+        </div>
+        <div class="phase-global-card">
+          <div class="k">Confidence</div>
+          <div class="v" id="business-confidence">Low</div>
+          <div class="meta" id="business-confidence-meta">Conviction will update after analyst output arrives.</div>
+        </div>
+        <div class="phase-global-card vote-trend-card">
+          <div class="k">Vote Trend</div>
+          <div class="vote-pills" id="vote-trend-pills">
+            <div class="vote-pill long"><div class="label">Long</div><div class="count">0</div></div>
+            <div class="vote-pill neutral"><div class="label">Neutral</div><div class="count">0</div></div>
+            <div class="vote-pill short"><div class="label">Short</div><div class="count">0</div></div>
+          </div>
+        </div>
+      </div>
+      <div id="phase-nav" class="phase-tab-row"></div>
+    </section>
+
+    <section class="main-grid">
+      <aside class="stack">
+        <article class="panel">
+          <div class="section-title">Scenario Brief</div>
+          <div class="section-subtitle">What the desk is deciding, the constraints, and the default PM posture.</div>
+          <div id="scenario-brief" class="scenario-brief"></div>
+        </article>
+      </aside>
+
+      <section class="stack">
+        <article class="panel panel-primary" data-phase-panel="phase_4">
+          <div class="section-title">Execution Summary</div>
+          <div class="section-subtitle">Ticket posture, entry and exit conditions, and immediate trader action.</div>
+          <div class="phase-note-meta" id="execution-phase-meta">Pending</div>
+          <div class="phase-note-grid" id="execution-phase-note">Trader execution guidance appears here during phase 4.</div>
+        </article>
+
+        <article class="panel panel-primary" data-phase-panel="phase_5">
+          <div class="section-title">Monitoring Summary</div>
+          <div class="section-subtitle">What to watch after execution, triggers, and review cadence.</div>
+          <div class="phase-note-meta" id="monitoring-phase-meta">Pending</div>
+          <div class="phase-note-grid" id="monitoring-phase-note">Monitoring priorities appear here during phase 5.</div>
+        </article>
+
+        <article class="panel" data-phase-panel="phase_3">
+          <div class="section-title">Final Decision Packet</div>
+          <div class="decision-panel" id="decision-package"></div>
+        </article>
+
+        <article class="panel" data-phase-panel="phase_3">
+          <div class="section-title">Run Conclusion</div>
+          <div id="outcome-banner" class="outcome-banner"></div>
+        </article>
+
+        <article class="panel" data-phase-panel="phase_3">
+          <div class="section-title">Risk Gate</div>
+          <div class="risk-status" id="risk-status">Pending</div>
+          <div id="constraints"></div>
+        </article>
+
+        <article class="panel panel-primary" data-phase-panel="phase_2">
+          <div class="section-title">Debate Summary</div>
+          <div class="section-subtitle">The strongest arguments, counterarguments, and what the committee is still testing.</div>
+          <div class="dialogue-stream" id="agent-debate"></div>
+        </article>
+
+        <article class="panel panel-primary" data-phase-panel="phase_1">
+          <div class="section-title">Research Summary</div>
+          <div class="section-subtitle">What the analysts learned before the debate starts.</div>
+          <div class="agent-grid" id="analyst-perspectives"></div>
+        </article>
+
+        <article class="panel panel-primary" data-phase-panel="phase_1">
+          <div class="section-title">Quant Analyst Summary</div>
+          <div class="section-subtitle">Quant validation output in the same analyst-card format.</div>
+          <div class="agent-grid" id="quant-analyst-perspective"></div>
+        </article>
+
+      </section>
+
+      <aside class="stack">
+        <article class="panel" data-phase-panel="phase_2">
+          <div class="section-title">Evidence Snapshot</div>
+          <div class="columns-2">
+            <div class="evidence-box">
+              <div class="section-title" style="margin-bottom:6px;">Top Support</div>
+              <ul id="evidence-support"></ul>
+            </div>
+            <div class="evidence-box">
+              <div class="section-title" style="margin-bottom:6px;">Top Risk</div>
+              <ul id="evidence-risk"></ul>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel" data-phase-panel="phase_1">
+          <div class="section-title">Quant Highlights</div>
+          <div class="metric-box">
+            <ul id="quant-metrics"></ul>
+          </div>
+        </article>
+
+        <article class="panel" data-phase-panel="phase_3">
+          <div class="section-title">Portfolio Exposure Preview</div>
+          <div class="section-subtitle">Estimated portfolio impact if this decision is executed.</div>
+          <div id="exposure-preview"></div>
+        </article>
+
+        <article class="panel panel-primary" data-phase-panel="phase_5">
+          <div class="section-title">Stock Price</div>
+          <div class="price-head">
+            <span id="stock-price-value">--</span>
+            <span class="price-head-right">
+              <span id="stock-price-change">--</span>
+              <select id="stock-timeframe-select" class="timeframe-select" aria-label="Stock chart range">
+                <option value="1d">1D</option>
+                <option value="5d">5D</option>
+                <option value="30d" selected>30D</option>
+                <option value="180d">180D</option>
+                <option value="1y">1Y</option>
+              </select>
+            </span>
+          </div>
+          <div class="exec-meta" id="stock-price-meta">Select ticker to load Yahoo Finance chart.</div>
+          <div class="price-chart-wrap">
+            <svg id="stock-price-chart" viewBox="0 0 320 118" preserveAspectRatio="none" aria-label="Stock price chart">
+              <line class="chart-axis-line" x1="0" y1="98" x2="320" y2="98"></line>
+              <path id="stock-price-line" class="chart-price-line" d="M0 98 L320 98"></path>
+              <path id="stock-trend-long" class="chart-trend-long" d=""></path>
+              <path id="stock-trend-short" class="chart-trend-short" d=""></path>
+            </svg>
+          </div>
+          <div class="exec-meta" id="stock-chart-status">Waiting for price data.</div>
+        </article>
+      </aside>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

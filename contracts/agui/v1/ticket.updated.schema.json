@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/agui/v1/ticket.updated.schema.json",
+  "allOf": [
+    {"$ref": "common.schema.json#/$defs/baseEnvelope"},
+    {
+      "properties": {
+        "event_type": {"const": "ticket.updated"},
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ticket_id", "status"],
+          "properties": {
+            "ticket_id": {"type": "string"},
+            "status": {"type": "string", "enum": ["draft", "final"]}
+          }
+        }
+      }
+    }
+  ]
+}

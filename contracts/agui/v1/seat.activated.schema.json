@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/agui/v1/seat.activated.schema.json",
+  "allOf": [
+    {"$ref": "common.schema.json#/$defs/baseEnvelope"},
+    {
+      "properties": {
+        "event_type": {"const": "seat.activated"},
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["seat_id", "activation_mode"],
+          "properties": {
+            "seat_id": {"$ref": "common.schema.json#/$defs/roleId"},
+            "activation_mode": {"type": "string", "enum": ["required", "optional", "conditional"]}
+          }
+        }
+      }
+    }
+  ]
+}

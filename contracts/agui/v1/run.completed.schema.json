@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/agui/v1/run.completed.schema.json",
+  "allOf": [
+    {"$ref": "common.schema.json#/$defs/baseEnvelope"},
+    {
+      "properties": {
+        "event_type": {"const": "run.completed"},
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["final_decision_id", "ticket_id"],
+          "properties": {
+            "final_decision_id": {"type": "string"},
+            "ticket_id": {"type": "string"}
+          }
+        }
+      }
+    }
+  ]
+}

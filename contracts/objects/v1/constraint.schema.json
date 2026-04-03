@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/objects/v1/constraint.schema.json",
+  "title": "Constraint",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "constraint_id", "constraint_type", "label", "severity", "provenance"],
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schemaVersion"},
+    "constraint_id": {"$ref": "common.schema.json#/$defs/identifier"},
+    "constraint_type": {"type": "string", "enum": ["position_limit", "liquidity", "correlation", "event_risk", "mandate"]},
+    "label": {"type": "string", "minLength": 1},
+    "value": {"type": ["number", "string", "boolean"]},
+    "severity": {"type": "string", "enum": ["info", "warning", "blocking"]},
+    "provenance": {"$ref": "common.schema.json#/$defs/provenance"}
+  }
+}

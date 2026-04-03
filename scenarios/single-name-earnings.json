@@ -1,0 +1,117 @@
+{
+  "schema_version": "v2",
+  "scenario_id": "single_name_earnings",
+  "name": "Earnings Committee",
+  "summary": "Decide whether to initiate a tactical NVDA position ahead of earnings with explicit event-risk sizing discipline.",
+  "instrument": "NVDA",
+  "instrument_universe": ["NVDA"],
+  "instrument_label": "NVDA",
+  "primary_runtime": "wayflow",
+  "parity_runtime": "langgraph",
+  "thesis_prompt": "Determine whether the fund should initiate a tactical position in NVDA ahead of earnings while respecting event risk, portfolio correlation, and position size limits.",
+  "decision_question": "Should the desk initiate a pre-earnings position, express a short, or stay neutral into the event?",
+  "scenario_type": "pre_event_initiation",
+  "starting_position_state": {
+    "stance": "neutral",
+    "position_action": "defer",
+    "size_bps": 0,
+    "existing_position": false
+  },
+  "allowed_end_states": {
+    "stances": ["long", "short", "neutral"],
+    "actions": ["initiate", "defer"]
+  },
+  "seat_plan": {
+    "required": [
+      "market_analyst",
+      "news_analyst",
+      "fundamentals_analyst",
+      "bull_researcher",
+      "bear_researcher",
+      "research_manager",
+      "quant_analyst",
+      "risk_manager",
+      "portfolio_manager",
+      "trader"
+    ],
+    "optional": [
+      "social_analyst",
+      "macro_economist",
+      "geopolitical_analyst",
+      "aggressive_analyst",
+      "conservative_analyst",
+      "neutral_analyst"
+    ],
+    "scenario_overrides": {
+      "prefer_enabled": ["aggressive_analyst", "conservative_analyst"],
+      "suppress": ["geopolitical_analyst"]
+    }
+  },
+  "branch_conditions": {
+    "force_breaking_news": false,
+    "requires_news_confirmation": false,
+    "pair_trade_mode": false,
+    "thesis_break_mode": false,
+    "prefer_enabled": ["aggressive_analyst", "conservative_analyst"],
+    "suppress_seats": ["geopolitical_analyst"]
+  },
+  "pm_decision_policy": {
+    "signal_bias": 0.3,
+    "long_signal_threshold": 2.8,
+    "short_signal_threshold": -2.6,
+    "neutral_vote_band": 1,
+    "warning_size_multiplier": 0.85,
+    "size_ranges_bps": {
+      "long": [40, 80],
+      "short": [25, 55],
+      "neutral": [0, 0]
+    },
+    "action_map": {
+      "long": "initiate",
+      "short": "initiate",
+      "neutral": "defer"
+    },
+    "preview": {
+      "outcome": "approved_with_changes",
+      "position_size_bps": "40-80",
+      "approval_notes": "Starter size only before earnings; add only after confirmation."
+    }
+  },
+  "constraints": [
+    {
+      "constraint_id": "max_position_bps",
+      "constraint_type": "position_limit",
+      "label": "Max gross position size",
+      "value": 125,
+      "severity": "blocking"
+    },
+    {
+      "constraint_id": "event_risk_gate",
+      "constraint_type": "event_risk",
+      "label": "Earnings event requires explicit PM approval",
+      "value": true,
+      "severity": "blocking"
+    },
+    {
+      "constraint_id": "ai_basket_correlation",
+      "constraint_type": "correlation",
+      "label": "Correlation to existing AI basket must stay below desk threshold",
+      "value": "elevated_watch",
+      "severity": "warning"
+    },
+    {
+      "constraint_id": "liquidity_check",
+      "constraint_type": "liquidity",
+      "label": "Position must fit within normal daily liquidity limits",
+      "value": "required",
+      "severity": "blocking"
+    }
+  ],
+  "demo_mode": {
+    "trade_side": "BUY",
+    "time_horizon": "event_tactical",
+    "quant_metric_budget": 3,
+    "allow_partial_metrics": true,
+    "position_context": "No existing position. PM is deciding whether to initiate risk ahead of the event."
+  }
+}

@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
 
 from runtime.common.scenario_loader import SCENARIO_FILE_NAMES
 from runtime.common.scenario_validation import validate_scenario_catalog
+from runtime.common.agent_spec import CANONICAL_STAGE_SEQUENCE, flow_stage_order
 
 
 SCENARIO_FILES = [f"scenarios/{filename}" for filename in SCENARIO_FILE_NAMES]
@@ -63,8 +64,14 @@ def main() -> None:
 
     spec = load_json("spec/exported/agentic-trading-desk.spec.json")
     assert spec["desk"]["desk_id"] == "agentic_trading_desk"
+    assert spec["export_kind"] == "oracle_open_agent_spec"
+    assert spec["agent_spec_version"] == "26.1.0"
+    assert flow_stage_order(spec) == CANONICAL_STAGE_SEQUENCE
+    assert [stage["id"] for stage in spec["flow"]["stages"]] == CANONICAL_STAGE_SEQUENCE
     assert len(spec["roles"]) == len(role_ids)
     assert len(spec["flow"]["stages"]) == 8
+    component_types = {component["component_type"] for component in spec["components"]}
+    assert {"Agent", "Flow"}.issubset(component_types), "exported spec missing Agent/Flow components"
 
     print(json.dumps({
         "status": "ok",

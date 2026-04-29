@@ -3218,7 +3218,6 @@ function renderExecutiveStrip() {
   const confidenceNode = document.getElementById('business-confidence');
   const confidenceMetaNode = document.getElementById('business-confidence-meta');
   const phaseNode = document.getElementById('phase-current');
-  const runtimeNode = document.getElementById('phase-runtime');
   const runIdNode = document.getElementById('phase-run-id');
   const recommendation = businessRecommendationSummary();
   const risk = businessRiskSummary();
@@ -3243,10 +3242,6 @@ function renderExecutiveStrip() {
     } else {
       phaseNode.textContent = `${businessPhaseLabel(livePhase)} · Transitioning`;
     }
-  }
-  if (runtimeNode) {
-    const runtime = state.runRuntime || document.getElementById('runtime')?.value || 'N/A';
-    runtimeNode.textContent = String(runtime).toUpperCase();
   }
   if (runIdNode) {
     runIdNode.textContent = state.currentRunId || state.liveRunId || 'Not started';

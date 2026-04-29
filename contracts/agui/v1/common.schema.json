@@ -8,7 +8,7 @@
     "runId": {"type": "string", "pattern": "^[a-z][a-z0-9_\\-.]*$"},
     "stageId": {
       "type": "string",
-      "enum": ["gather", "debate", "quantify", "synthesize", "risk_review", "pm_review", "trade_finalize", "monitor", "completed", "failed"]
+      "enum": ["gather", "quantify", "debate", "synthesize", "risk_review", "pm_review", "trade_finalize", "monitor", "completed", "failed"]
     },
     "roleId": {
       "type": "string",

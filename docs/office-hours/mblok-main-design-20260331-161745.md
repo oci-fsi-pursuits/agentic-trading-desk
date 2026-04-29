@@ -110,7 +110,7 @@ Event envelope fields required for every event:
 
 Canonical state-machine rules:
 - `run_started` -> `gather` (always first stage)
-- `stage_transitioned` valid path: `gather -> debate -> quantify -> synthesize -> risk_review -> pm_review -> trade_finalize -> monitor`
+- `stage_transitioned` valid path: `gather -> quantify -> debate -> synthesize -> risk_review -> pm_review -> trade_finalize -> monitor`
 - `risk_evaluated.gate_status=blocked` forces terminal decision path with `decision_finalized.decision in {REJECT, DEFER}`
 - `risk_evaluated.gate_status in {pass,warning}` allows normal terminal path with `decision_finalized.decision in {APPROVE, DEFER}`
 - Every run must emit exactly one terminal `decision_finalized` event.

@@ -12,18 +12,19 @@ Buy-side investment committee simulator with:
 
 Real in this repo:
 - authored role and flow definitions under `authoring/`
-- exported spec artifact under `spec/exported/`
+- exported Oracle Open Agent Spec-shaped artifact under `spec/exported/`
+- Agent and Flow components with explicit per-role tool declarations
 - typed contracts under `contracts/`
 - runtime adapters that emit canonical events and materialize objects
 - quant execution via a bounded Python subprocess
 - conformance tests across both runtimes
 
 Simulated in this repo:
-- `wayflow` and `langgraph` are local adapter shims, not the official external packages
+- `wayflow` and `langgraph` are local adapter shims, not vendored copies of the official external packages
 - no live market data feed
 - no real OCI deployment from inside this sandbox
 
-That is deliberate. The environment does not have the Oracle/LangGraph packages installed or network access to fetch them, so the repo keeps the architecture honest instead of faking imports.
+That is deliberate. The repo exports and validates the canonical Agent Spec artifact, then runs it through local adapters so the demo stays runnable without external runtime packages.
 
 ## Repo layout
 
@@ -67,10 +68,14 @@ Note: in some sandboxed environments, binding a local TCP port is blocked. If th
 Implemented:
 - one starter scenario: `single_name_earnings`
 - full 16-role registry in contracts and authored spec
+- exported Agent Spec artifact with Agent and Flow components
+- spec-driven runtime stage order: gather → quantify → debate → synthesize → risk_review → pm_review → trade_finalize → monitor
 - core desk execution path
 - optional seat selection in the UI contract
+- server-side participation-matrix enforcement for required, optional, and suppressed seats
 - runtime fail-fast contract validation for AG-UI envelopes and typed objects
 - role-specific prompt registry wired into runtime agent text generation
+- role-specific tool declarations exported into the Agent Spec artifact
 - OCI GenAI integration for agent narratives with deterministic fallback when not configured
 - event log and object-store materialization under `var/runs/`
 - replay retrieval endpoint: `/api/runs?run_id=<id>`
@@ -79,9 +84,7 @@ Implemented:
 - OCI environment validation with optional strict startup enforcement (`STRICT_ENV_VALIDATION=1`)
 
 Not implemented yet:
-- official Oracle Agent Spec / PyAgentSpec integration
-- official WayFlow runtime
-- official LangGraph adapter
+- direct execution through installed external Oracle/PyAgentSpec, WayFlow, or LangGraph packages
 - OCI-specific deployment automation
 - live licensed data integrations
 

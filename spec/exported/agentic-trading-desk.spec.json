@@ -1,6 +1,806 @@
 {
-  "schema_version": "v1",
-  "export_kind": "agentic_trading_desk_spec",
+  "schema_version": "v2",
+  "agent_spec_version": "26.1.0",
+  "export_kind": "oracle_open_agent_spec",
+  "metadata": {
+    "name": "Agentic Trading Desk",
+    "description": "Buy-side investment committee simulator with runtime portability.",
+    "desk_id": "agentic_trading_desk",
+    "flow_id": "investment_committee_v1",
+    "runtime_targets": [
+      "wayflow",
+      "langgraph"
+    ]
+  },
+  "components": [
+    {
+      "component_type": "Agent",
+      "id": "market_analyst",
+      "name": "Market Analyst",
+      "description": "Turn market context and price action into typed evidence for the desk.",
+      "instructions": "Turn market context and price action into typed evidence for the desk.",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_stock_data",
+          "description": "Fetch recent ticker price bars for technical analysis.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "ticker": {
+                "type": "string"
+              },
+              "lookback_days": {
+                "type": "integer",
+                "minimum": 5,
+                "maximum": 365
+              }
+            },
+            "required": [
+              "ticker"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "type": "function",
+          "name": "get_indicators",
+          "description": "Compute technical indicators for the ticker.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "ticker": {
+                "type": "string"
+              },
+              "indicators": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "lookback_days": {
+                "type": "integer",
+                "minimum": 30,
+                "maximum": 365
+              }
+            },
+            "required": [
+              "ticker"
+            ],
+            "additionalProperties": false
+          }
+        }
+      ],
+      "input_contracts": [],
+      "output_contracts": [
+        "source",
+        "evidence"
+      ],
+      "disallowed_outputs": [
+        "decision",
+        "trade_ticket"
+      ],
+      "metadata": {
+        "role_id": "market_analyst",
+        "display_name": "Market Analyst"
+      }
+    },
+    {
+      "component_type": "Agent",
+      "id": "news_analyst",
+      "name": "News Analyst",
+      "description": "Summarize relevant news and channel checks into evidence cards.",
+      "instructions": "Summarize relevant news and channel checks into evidence cards.",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_news",
+          "description": "Fetch ticker-specific news headlines and article links.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "ticker": {
+                "type": "string"
+              },
+              "start_date": {
+                "type": "string"
+              },
+              "end_date": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              }
+            },
+            "required": [
+              "ticker"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "type": "function",
+          "name": "get_global_news",
+          "description": "Fetch broad market and macro headline context.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "curr_date": {
+                "type": "string"
+              },
+              "look_back_days": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 14
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      ],
+      "input_contracts": [],
+      "output_contracts": [
+        "source",
+        "evidence"
+      ],
+      "disallowed_outputs": [
+        "decision",
+        "trade_ticket"
+      ],
+      "metadata": {
+        "role_id": "news_analyst",
+        "display_name": "News Analyst"
+      }
+    },
+    {
+      "component_type": "Agent",
+      "id": "fundamentals_analyst",
+      "name": "Fundamentals Analyst",
+      "description": "Assess earnings setup, valuation, and estimate revision direction.",
+      "instructions": "Assess earnings setup, valuation, and estimate revision direction.",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_fundamentals",
+          "description": "Fetch company fundamentals and valuation metrics.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "ticker": {
+                "type": "string"
+              },
+              "as_of": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ticker"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "type": "function",
+          "name": "get_balance_sheet",
+          "description": "Fetch company balance sheet data.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "ticker": {
+                "type": "string"
+              },
+              "period": {
+                "type": "string",
+                "enum": [
+                  "quarterly",
+                  "annual"
+                ]
+              }
+            },
+            "required": [
+              "ticker"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "type": "function",
+          "name": "get_cashflow",
+          "description": "Fetch company cash flow statement data.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "ticker": {
+                "type": "string"
+              },
+              "period": {
+                "type": "string",
+                "enum": [
+                  "quarterly",
+                  "annual"
+                ]
+              }
+            },
+            "required": [
+              "ticker"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "type": "function",
+          "name": "get_income_statement",
+          "description": "Fetch company income statement data.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "ticker": {
+                "type": "string"
+              },
+              "period": {
+                "type": "string",
+                "enum": [
+                  "quarterly",
+                  "annual"
+                ]
+              }
+            },
+            "required": [
+              "ticker"
+            ],
+            "additionalProperties": false
+          }
+        }
+      ],
+      "input_contracts": [],
+      "output_contracts": [
+        "source",
+        "evidence"
+      ],
+      "disallowed_outputs": [
+        "decision",
+        "trade_ticket"
+      ],
+      "metadata": {
+        "role_id": "fundamentals_analyst",
+        "display_name": "Fundamentals Analyst"
+      }
+    },
+    {
+      "component_type": "Agent",
+      "id": "macro_economist",
+      "name": "Macro Economist",
+      "description": "Translate macro regime and rates context into scenario-relevant evidence.",
+      "instructions": "Translate macro regime and rates context into scenario-relevant evidence.",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_news",
+          "description": "Fetch ticker-specific news headlines and article links.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "ticker": {
+                "type": "string"
+              },
+              "start_date": {
+                "type": "string"
+              },
+              "end_date": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              }
+            },
+            "required": [
+              "ticker"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "type": "function",
+          "name": "get_global_news",
+          "description": "Fetch broad market and macro headline context.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "curr_date": {
+                "type": "string"
+              },
+              "look_back_days": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 14
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      ],
+      "input_contracts": [],
+      "output_contracts": [
+        "source",
+        "evidence"
+      ],
+      "disallowed_outputs": [
+        "trade_ticket"
+      ],
+      "metadata": {
+        "role_id": "macro_economist",
+        "display_name": "Macro Economist"
+      }
+    },
+    {
+      "component_type": "Agent",
+      "id": "geopolitical_analyst",
+      "name": "Geopolitical Analyst",
+      "description": "Surface geopolitical shocks when cross-border or country-risk conditions are triggered.",
+      "instructions": "Surface geopolitical shocks when cross-border or country-risk conditions are triggered.",
+      "tools": [],
+      "input_contracts": [],
+      "output_contracts": [
+        "source",
+        "evidence"
+      ],
+      "disallowed_outputs": [
+        "trade_ticket"
+      ],
+      "metadata": {
+        "role_id": "geopolitical_analyst",
+        "display_name": "Geopolitical Analyst"
+      }
+    },
+    {
+      "component_type": "Agent",
+      "id": "social_analyst",
+      "name": "Social Analyst",
+      "description": "Surface sentiment and crowding signals as secondary context.",
+      "instructions": "Surface sentiment and crowding signals as secondary context.",
+      "tools": [],
+      "input_contracts": [],
+      "output_contracts": [
+        "source",
+        "evidence"
+      ],
+      "disallowed_outputs": [
+        "decision",
+        "trade_ticket"
+      ],
+      "metadata": {
+        "role_id": "social_analyst",
+        "display_name": "Social Analyst"
+      }
+    },
+    {
+      "component_type": "Agent",
+      "id": "aggressive_analyst",
+      "name": "Aggressive Analyst",
+      "description": "Argue for maximizing upside within the mandate when the setup is favorable.",
+      "instructions": "Argue for maximizing upside within the mandate when the setup is favorable.",
+      "tools": [],
+      "input_contracts": [],
+      "output_contracts": [
+        "claim"
+      ],
+      "disallowed_outputs": [
+        "trade_ticket"
+      ],
+      "metadata": {
+        "role_id": "aggressive_analyst",
+        "display_name": "Aggressive Analyst"
+      }
+    },
+    {
+      "component_type": "Agent",
+      "id": "conservative_analyst",
+      "name": "Conservative Analyst",
+      "description": "Argue for preserving capital and reducing event exposure.",
+      "instructions": "Argue for preserving capital and reducing event exposure.",
+      "tools": [],
+      "input_contracts": [],
+      "output_contracts": [
+        "claim"
+      ],
+      "disallowed_outputs": [
+        "trade_ticket"
+      ],
+      "metadata": {
+        "role_id": "conservative_analyst",
+        "display_name": "Conservative Analyst"
+      }
+    },
+    {
+      "component_type": "Agent",
+      "id": "neutral_analyst",
+      "name": "Neutral Analyst",
+      "description": "Frame the balanced base case when directional conviction is mixed.",
+      "instructions": "Frame the balanced base case when directional conviction is mixed.",
+      "tools": [],
+      "input_contracts": [],
+      "output_contracts": [
+        "claim"
+      ],
+      "disallowed_outputs": [
+        "trade_ticket"
+      ],
+      "metadata": {
+        "role_id": "neutral_analyst",
+        "display_name": "Neutral Analyst"
+      }
+    },
+    {
+      "component_type": "Agent",
+      "id": "bull_researcher",
+      "name": "Bull Researcher",
+      "description": "Produce the strongest long thesis using available evidence.",
+      "instructions": "Produce the strongest long thesis using available evidence.",
+      "tools": [],
+      "input_contracts": [],
+      "output_contracts": [
+        "claim"
+      ],
+      "disallowed_outputs": [
+        "trade_ticket"
+      ],
+      "metadata": {
+        "role_id": "bull_researcher",
+        "display_name": "Bull Researcher"
+      }
+    },
+    {
+      "component_type": "Agent",
+      "id": "bear_researcher",
+      "name": "Bear Researcher",
+      "description": "Produce the strongest counter-case and visible dissent.",
+      "instructions": "Produce the strongest counter-case and visible dissent.",
+      "tools": [],
+      "input_contracts": [],
+      "output_contracts": [
+        "claim"
+      ],
+      "disallowed_outputs": [
+        "trade_ticket"
+      ],
+      "metadata": {
+        "role_id": "bear_researcher",
+        "display_name": "Bear Researcher"
+      }
+    },
+    {
+      "component_type": "Agent",
+      "id": "research_manager",
+      "name": "Research Manager",
+      "description": "Synthesize evidence and claims into a typed research recommendation.",
+      "instructions": "Synthesize evidence and claims into a typed research recommendation.",
+      "tools": [],
+      "input_contracts": [],
+      "output_contracts": [
+        "decision",
+        "artifact"
+      ],
+      "disallowed_outputs": [
+        "trade_ticket"
+      ],
+      "metadata": {
+        "role_id": "research_manager",
+        "display_name": "Research Manager"
+      }
+    },
+    {
+      "component_type": "Agent",
+      "id": "quant_analyst",
+      "name": "Quant Analyst",
+      "description": "Run bounded quant analysis and emit metrics plus notebook artifacts.",
+      "instructions": "Run bounded quant analysis and emit metrics plus notebook artifacts.",
+      "tools": [],
+      "input_contracts": [],
+      "output_contracts": [
+        "metric",
+        "artifact"
+      ],
+      "disallowed_outputs": [
+        "decision",
+        "trade_ticket"
+      ],
+      "metadata": {
+        "role_id": "quant_analyst",
+        "display_name": "Quant Analyst"
+      }
+    },
+    {
+      "component_type": "Agent",
+      "id": "risk_manager",
+      "name": "Risk Manager",
+      "description": "Apply desk constraints and emit risk review decisions and constraints.",
+      "instructions": "Apply desk constraints and emit risk review decisions and constraints.",
+      "tools": [],
+      "input_contracts": [],
+      "output_contracts": [
+        "constraint",
+        "decision",
+        "artifact"
+      ],
+      "disallowed_outputs": [
+        "claim"
+      ],
+      "metadata": {
+        "role_id": "risk_manager",
+        "display_name": "Risk Manager"
+      }
+    },
+    {
+      "component_type": "Agent",
+      "id": "portfolio_manager",
+      "name": "Portfolio Manager",
+      "description": "Approve, edit, or reject the recommendation.",
+      "instructions": "Approve, edit, or reject the recommendation.",
+      "tools": [],
+      "input_contracts": [],
+      "output_contracts": [
+        "decision"
+      ],
+      "disallowed_outputs": [
+        "source",
+        "metric"
+      ],
+      "metadata": {
+        "role_id": "portfolio_manager",
+        "display_name": "Portfolio Manager"
+      }
+    },
+    {
+      "component_type": "Agent",
+      "id": "trader",
+      "name": "Trader",
+      "description": "Turn the approved decision into a trade ticket and monitoring plan.",
+      "instructions": "Turn the approved decision into a trade ticket and monitoring plan.",
+      "tools": [],
+      "input_contracts": [],
+      "output_contracts": [
+        "trade_ticket",
+        "artifact"
+      ],
+      "disallowed_outputs": [
+        "claim"
+      ],
+      "metadata": {
+        "role_id": "trader",
+        "display_name": "Trader"
+      }
+    },
+    {
+      "component_type": "Flow",
+      "id": "investment_committee_v1",
+      "name": "Investment Committee Flow",
+      "stages": [
+        {
+          "id": "gather",
+          "name": "Gather",
+          "purpose": "Collect raw inputs and initial evidence before the desk argues the thesis.",
+          "agents": [
+            "market_analyst",
+            "news_analyst",
+            "fundamentals_analyst"
+          ],
+          "optional_agents": [
+            "social_analyst",
+            "macro_economist",
+            "geopolitical_analyst"
+          ],
+          "parallel": true,
+          "required_inputs": [
+            "scenario",
+            "dataset_refs"
+          ],
+          "expected_outputs": [
+            "source",
+            "evidence"
+          ],
+          "timeout_s": 60,
+          "on_seat_failure": "fallback_if_optional_fail_if_required",
+          "ui_panels": [
+            "phase_navigator",
+            "research_summary",
+            "transcript"
+          ]
+        },
+        {
+          "id": "quantify",
+          "name": "Quantify",
+          "purpose": "Execute quant validation early so debate can use quantitative signal and risk context.",
+          "agents": [
+            "quant_analyst"
+          ],
+          "optional_agents": [],
+          "parallel": false,
+          "required_inputs": [
+            "evidence",
+            "datasets"
+          ],
+          "expected_outputs": [
+            "metric",
+            "artifact"
+          ],
+          "timeout_s": 45,
+          "on_seat_failure": "fail_stage",
+          "ui_panels": [
+            "quant_notebook",
+            "research_summary"
+          ]
+        },
+        {
+          "id": "debate",
+          "name": "Debate",
+          "purpose": "Generate competing claims using gathered evidence and quant validation.",
+          "agents": [
+            "bull_researcher",
+            "bear_researcher"
+          ],
+          "optional_agents": [
+            "aggressive_analyst",
+            "conservative_analyst",
+            "neutral_analyst"
+          ],
+          "parallel": true,
+          "required_inputs": [
+            "evidence",
+            "metric"
+          ],
+          "expected_outputs": [
+            "claim"
+          ],
+          "timeout_s": 40,
+          "on_seat_failure": "skip_optional_fail_if_bull_or_bear_absent",
+          "ui_panels": [
+            "debate_strip",
+            "evidence_workspace"
+          ]
+        },
+        {
+          "id": "synthesize",
+          "name": "Synthesize",
+          "purpose": "Produce the combined research recommendation.",
+          "agents": [
+            "research_manager"
+          ],
+          "optional_agents": [],
+          "parallel": false,
+          "required_inputs": [
+            "evidence",
+            "claim",
+            "metric"
+          ],
+          "expected_outputs": [
+            "decision",
+            "artifact"
+          ],
+          "timeout_s": 20,
+          "on_seat_failure": "fail_stage",
+          "ui_panels": [
+            "recommendation_panel"
+          ]
+        },
+        {
+          "id": "risk_review",
+          "name": "Risk Review",
+          "purpose": "Apply mandate and portfolio constraints to the draft decision.",
+          "agents": [
+            "risk_manager"
+          ],
+          "optional_agents": [],
+          "parallel": false,
+          "required_inputs": [
+            "decision",
+            "constraint"
+          ],
+          "expected_outputs": [
+            "constraint",
+            "decision",
+            "artifact"
+          ],
+          "timeout_s": 20,
+          "on_seat_failure": "fail_stage",
+          "ui_panels": [
+            "risk_gate"
+          ]
+        },
+        {
+          "id": "pm_review",
+          "name": "Pm Review",
+          "purpose": "Capture PM approval, rejection, or edits.",
+          "agents": [
+            "portfolio_manager"
+          ],
+          "optional_agents": [],
+          "parallel": false,
+          "required_inputs": [
+            "decision",
+            "constraint"
+          ],
+          "expected_outputs": [
+            "decision"
+          ],
+          "timeout_s": 120,
+          "on_seat_failure": "fail_stage",
+          "ui_panels": [
+            "pm_action_panel"
+          ]
+        },
+        {
+          "id": "trade_finalize",
+          "name": "Trade Finalize",
+          "purpose": "Turn the approved decision and final constraints into a trade ticket.",
+          "agents": [
+            "trader"
+          ],
+          "optional_agents": [],
+          "parallel": false,
+          "required_inputs": [
+            "decision",
+            "constraint"
+          ],
+          "expected_outputs": [
+            "trade_ticket",
+            "artifact"
+          ],
+          "timeout_s": 15,
+          "on_seat_failure": "fail_stage",
+          "ui_panels": [
+            "trader_handoff"
+          ]
+        },
+        {
+          "id": "monitor",
+          "name": "Monitor",
+          "purpose": "Track post-decision state and hand back the monitoring plan.",
+          "agents": [
+            "trader"
+          ],
+          "optional_agents": [
+            "macro_economist",
+            "geopolitical_analyst",
+            "social_analyst"
+          ],
+          "parallel": true,
+          "required_inputs": [
+            "trade_ticket"
+          ],
+          "expected_outputs": [
+            "artifact"
+          ],
+          "timeout_s": 30,
+          "on_seat_failure": "continue_with_warnings",
+          "ui_panels": [
+            "monitor_panel",
+            "transcript"
+          ]
+        }
+      ]
+    }
+  ],
   "desk": {
     "schema_version": "v1",
     "desk_id": "agentic_trading_desk",
@@ -216,65 +1016,204 @@
     "stages": [
       {
         "id": "gather",
+        "purpose": "Collect raw inputs and initial evidence before the desk argues the thesis.",
         "required_roles": [
           "market_analyst",
           "news_analyst",
           "fundamentals_analyst"
         ],
-        "parallel": true
+        "optional_roles": [
+          "social_analyst",
+          "macro_economist",
+          "geopolitical_analyst"
+        ],
+        "parallel": true,
+        "required_inputs": [
+          "scenario",
+          "dataset_refs"
+        ],
+        "expected_outputs": [
+          "source",
+          "evidence"
+        ],
+        "timeout_s": 60,
+        "on_seat_failure": "fallback_if_optional_fail_if_required",
+        "ui_panels": [
+          "phase_navigator",
+          "research_summary",
+          "transcript"
+        ]
+      },
+      {
+        "id": "quantify",
+        "purpose": "Execute quant validation early so debate can use quantitative signal and risk context.",
+        "required_roles": [
+          "quant_analyst"
+        ],
+        "optional_roles": [],
+        "parallel": false,
+        "required_inputs": [
+          "evidence",
+          "datasets"
+        ],
+        "expected_outputs": [
+          "metric",
+          "artifact"
+        ],
+        "timeout_s": 45,
+        "on_seat_failure": "fail_stage",
+        "ui_panels": [
+          "quant_notebook",
+          "research_summary"
+        ]
       },
       {
         "id": "debate",
+        "purpose": "Generate competing claims using gathered evidence and quant validation.",
         "required_roles": [
           "bull_researcher",
           "bear_researcher"
         ],
-        "parallel": true
-      },
-      {
-        "id": "quantify",
-        "required_roles": [
-          "quant_analyst"
+        "optional_roles": [
+          "aggressive_analyst",
+          "conservative_analyst",
+          "neutral_analyst"
         ],
-        "parallel": false
+        "parallel": true,
+        "required_inputs": [
+          "evidence",
+          "metric"
+        ],
+        "expected_outputs": [
+          "claim"
+        ],
+        "timeout_s": 40,
+        "on_seat_failure": "skip_optional_fail_if_bull_or_bear_absent",
+        "ui_panels": [
+          "debate_strip",
+          "evidence_workspace"
+        ]
       },
       {
         "id": "synthesize",
+        "purpose": "Produce the combined research recommendation.",
         "required_roles": [
           "research_manager"
         ],
-        "parallel": false
+        "optional_roles": [],
+        "parallel": false,
+        "required_inputs": [
+          "evidence",
+          "claim",
+          "metric"
+        ],
+        "expected_outputs": [
+          "decision",
+          "artifact"
+        ],
+        "timeout_s": 20,
+        "on_seat_failure": "fail_stage",
+        "ui_panels": [
+          "recommendation_panel"
+        ]
       },
       {
         "id": "risk_review",
+        "purpose": "Apply mandate and portfolio constraints to the draft decision.",
         "required_roles": [
           "risk_manager"
         ],
-        "parallel": false
+        "optional_roles": [],
+        "parallel": false,
+        "required_inputs": [
+          "decision",
+          "constraint"
+        ],
+        "expected_outputs": [
+          "constraint",
+          "decision",
+          "artifact"
+        ],
+        "timeout_s": 20,
+        "on_seat_failure": "fail_stage",
+        "ui_panels": [
+          "risk_gate"
+        ]
       },
       {
         "id": "pm_review",
+        "purpose": "Capture PM approval, rejection, or edits.",
         "required_roles": [
           "portfolio_manager"
         ],
-        "parallel": false
+        "optional_roles": [],
+        "parallel": false,
+        "required_inputs": [
+          "decision",
+          "constraint"
+        ],
+        "expected_outputs": [
+          "decision"
+        ],
+        "timeout_s": 120,
+        "on_seat_failure": "fail_stage",
+        "ui_panels": [
+          "pm_action_panel"
+        ]
       },
       {
         "id": "trade_finalize",
+        "purpose": "Turn the approved decision and final constraints into a trade ticket.",
         "required_roles": [
           "trader"
         ],
-        "parallel": false
+        "optional_roles": [],
+        "parallel": false,
+        "required_inputs": [
+          "decision",
+          "constraint"
+        ],
+        "expected_outputs": [
+          "trade_ticket",
+          "artifact"
+        ],
+        "timeout_s": 15,
+        "on_seat_failure": "fail_stage",
+        "ui_panels": [
+          "trader_handoff"
+        ]
       },
       {
         "id": "monitor",
+        "purpose": "Track post-decision state and hand back the monitoring plan.",
         "required_roles": [
           "trader"
         ],
-        "parallel": false
+        "optional_roles": [
+          "macro_economist",
+          "geopolitical_analyst",
+          "social_analyst"
+        ],
+        "parallel": true,
+        "required_inputs": [
+          "trade_ticket"
+        ],
+        "expected_outputs": [
+          "artifact"
+        ],
+        "timeout_s": 30,
+        "on_seat_failure": "continue_with_warnings",
+        "ui_panels": [
+          "monitor_panel",
+          "transcript"
+        ]
       }
     ]
   },
+  "runtime_targets": [
+    "wayflow",
+    "langgraph"
+  ],
   "contracts": {
     "role_registry": "contracts/objects/v1/role-registry.json",
     "stage_registry": "contracts/objects/v1/stage-registry.json",

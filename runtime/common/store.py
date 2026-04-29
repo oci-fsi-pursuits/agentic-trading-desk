@@ -68,7 +68,12 @@ class RunStore:
     def list_runs(cls, limit: int = 20) -> list[dict[str, Any]]:
         ensure_runs_root()
         runs = []
-        for run_dir in sorted(RUNS_ROOT.iterdir(), reverse=True):
+        run_dirs = [run_dir for run_dir in RUNS_ROOT.iterdir() if run_dir.is_dir()]
+        run_dirs.sort(
+            key=lambda run_dir: (run_dir / "summary.json").stat().st_mtime if (run_dir / "summary.json").exists() else 0,
+            reverse=True,
+        )
+        for run_dir in run_dirs:
             if not run_dir.is_dir():
                 continue
             summary_path = run_dir / "summary.json"

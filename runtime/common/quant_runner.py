@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -8,6 +9,26 @@ from pathlib import Path
 from typing import Any
 
 from runtime.common.utils import ROOT
+
+QUANT_TIMEOUT_S = 20
+QUANT_MEMORY_LIMIT_BYTES = 512 * 1024 * 1024
+
+
+def _limit_quant_process() -> None:
+    if os.name != "posix":
+        return
+    try:
+        import resource
+    except ImportError:
+        return
+    try:
+        resource.setrlimit(resource.RLIMIT_CPU, (QUANT_TIMEOUT_S, QUANT_TIMEOUT_S + 1))
+    except (OSError, ValueError):
+        pass
+    try:
+        resource.setrlimit(resource.RLIMIT_AS, (QUANT_MEMORY_LIMIT_BYTES, QUANT_MEMORY_LIMIT_BYTES))
+    except (OSError, ValueError):
+        pass
 
 
 def run_quant(dataset: dict[str, Any], run_id: str) -> dict[str, Any]:
@@ -96,8 +117,9 @@ print(json.dumps(out))
         [sys.executable, str(code_path), str(dataset_path)],
         capture_output=True,
         text=True,
-        timeout=20,
+        timeout=QUANT_TIMEOUT_S,
         cwd=artifact_dir,
+        preexec_fn=_limit_quant_process if os.name == "posix" else None,
     )
     if completed.returncode != 0:
         raise RuntimeError(completed.stderr.strip() or "quant runner failed")

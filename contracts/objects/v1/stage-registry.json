@@ -2,8 +2,8 @@
   "schema_version": "v1",
   "stages": [
     {"id": "gather", "display_name": "Gather", "sequence": 10, "terminal": false},
-    {"id": "debate", "display_name": "Debate", "sequence": 20, "terminal": false},
-    {"id": "quantify", "display_name": "Quantify", "sequence": 30, "terminal": false},
+    {"id": "quantify", "display_name": "Quantify", "sequence": 20, "terminal": false},
+    {"id": "debate", "display_name": "Debate", "sequence": 30, "terminal": false},
     {"id": "synthesize", "display_name": "Synthesize", "sequence": 40, "terminal": false},
     {"id": "risk_review", "display_name": "Risk Review", "sequence": 50, "terminal": false},
     {"id": "pm_review", "display_name": "Portfolio Manager Review", "sequence": 60, "terminal": false},

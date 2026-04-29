@@ -14,6 +14,7 @@ from runtime.common.data_providers import X_SEARCH_LOOKBACK_DAYS, fetch_news_dom
 from runtime.common.live_context import build_live_context
 from runtime.common.oci_genai import AgentTextService
 from runtime.common.quant_runner import run_quant
+from runtime.common.registry import role_ids
 from runtime.common.scenario_loader import load_demo_dataset, load_scenario
 from runtime.common.store import RunStore
 from runtime.common.types import EventEnvelope, RunArtifacts, RunContext
@@ -631,7 +632,7 @@ class BaseAdapter(ABC):
         run_id: str | None = None,
     ) -> tuple[RunContext, dict[str, Any]]:
         scenario = load_scenario(scenario_id)
-        seats = active_seat_ids or [*scenario["required_seat_ids"], *scenario["optional_seat_ids"]]
+        seats = self.resolve_active_seats(scenario, active_seat_ids)
         requested_tokens = self.extract_tickers(ticker, limit=4)
         requested_ticker = requested_tokens[0] if requested_tokens else (ticker or scenario.get("instrument", "NVDA")).strip().upper()
         if not requested_ticker:
@@ -650,6 +651,48 @@ class BaseAdapter(ABC):
             ),
             scenario,
         )
+
+    @staticmethod
+    def resolve_active_seats(scenario: dict[str, Any], requested_seat_ids: list[str] | None) -> list[str]:
+        known_roles = set(role_ids())
+        required = list(scenario["required_seat_ids"])
+        optional = list(scenario["optional_seat_ids"])
+        overrides = dict((scenario.get("seat_plan", {}) or {}).get("scenario_overrides", {}) or {})
+        preferred = list(overrides.get("prefer_enabled") or scenario.get("branch_conditions", {}).get("prefer_enabled", []) or [])
+        suppressed = set(overrides.get("suppress") or scenario.get("branch_conditions", {}).get("suppress_seats", []) or [])
+        allowed = set(required).union(optional).difference(suppressed)
+
+        if requested_seat_ids is None:
+            selected = [*required, *[seat_id for seat_id in preferred if seat_id in allowed and seat_id not in required]]
+        else:
+            selected = []
+            seen: set[str] = set()
+            for raw_seat_id in requested_seat_ids:
+                seat_id = str(raw_seat_id or "").strip()
+                if not seat_id or seat_id in seen:
+                    continue
+                seen.add(seat_id)
+                selected.append(seat_id)
+
+        unknown = sorted(set(selected).difference(known_roles))
+        if unknown:
+            raise ValueError(f"unknown active seats requested: {unknown}")
+
+        missing_required = sorted(set(required).difference(selected))
+        if missing_required:
+            raise ValueError(f"active seats must include required scenario seats: {missing_required}")
+
+        suppressed_requested = sorted(set(selected).intersection(suppressed))
+        if suppressed_requested:
+            raise ValueError(f"active seats include scenario-suppressed seats: {suppressed_requested}")
+
+        out_of_scope = sorted(set(selected).difference(allowed))
+        if out_of_scope:
+            raise ValueError(f"active seats are not available in this scenario: {out_of_scope}")
+
+        ordered = [seat_id for seat_id in required if seat_id in selected]
+        ordered.extend(seat_id for seat_id in optional if seat_id in selected and seat_id not in ordered)
+        return ordered
 
     @staticmethod
     def extract_tickers(raw: str | None, limit: int = 2) -> list[str]:
@@ -2791,7 +2834,6 @@ class BaseAdapter(ABC):
             "success",
             "Monitoring plan delivered; desk ready for continuous loop checks.",
         )
-        artifacts.stage_sequence.append("completed")
         self.emit(artifacts, store, self.make_event(ctx, "completed", "trader", "run.completed", {"final_decision_id": pm_decision["decision_id"], "ticket_id": ticket["ticket_id"]}))
 
         store.write_objects(artifacts)

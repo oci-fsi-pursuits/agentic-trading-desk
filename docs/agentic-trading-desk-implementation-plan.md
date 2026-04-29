@@ -440,7 +440,7 @@ Deferred (needs explicit product call):
 
 ### Proposed TODO candidates
 1. Consolidate scenario source of truth so runtime catalog and `scenarios/` artifacts do not drift.
-2. Update stage-contract docs to match implemented order: `gather -> quantify -> debate -> synthesize -> risk_review -> pm_review -> trade_finalize -> monitor`.
+2. Keep stage-contract docs and exported Agent Spec checks pinned to `gather -> quantify -> debate -> synthesize -> risk_review -> pm_review -> trade_finalize -> monitor`.
 3. Decide whether PM review should stay demo-scripted or become truly human-paced in the main flow.
 4. Define transcript auto-scroll behavior with explicit user override.
 

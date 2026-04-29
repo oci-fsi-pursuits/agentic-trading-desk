@@ -3,13 +3,101 @@
   "flow_id": "investment_committee_v1",
   "name": "Investment Committee Flow",
   "stages": [
-    {"id": "gather", "required_roles": ["market_analyst", "news_analyst", "fundamentals_analyst"], "parallel": true},
-    {"id": "debate", "required_roles": ["bull_researcher", "bear_researcher"], "parallel": true},
-    {"id": "quantify", "required_roles": ["quant_analyst"], "parallel": false},
-    {"id": "synthesize", "required_roles": ["research_manager"], "parallel": false},
-    {"id": "risk_review", "required_roles": ["risk_manager"], "parallel": false},
-    {"id": "pm_review", "required_roles": ["portfolio_manager"], "parallel": false},
-    {"id": "trade_finalize", "required_roles": ["trader"], "parallel": false},
-    {"id": "monitor", "required_roles": ["trader"], "parallel": false}
+    {
+      "id": "gather",
+      "purpose": "Collect raw inputs and initial evidence before the desk argues the thesis.",
+      "required_roles": ["market_analyst", "news_analyst", "fundamentals_analyst"],
+      "optional_roles": ["social_analyst", "macro_economist", "geopolitical_analyst"],
+      "parallel": true,
+      "required_inputs": ["scenario", "dataset_refs"],
+      "expected_outputs": ["source", "evidence"],
+      "timeout_s": 60,
+      "on_seat_failure": "fallback_if_optional_fail_if_required",
+      "ui_panels": ["phase_navigator", "research_summary", "transcript"]
+    },
+    {
+      "id": "quantify",
+      "purpose": "Execute quant validation early so debate can use quantitative signal and risk context.",
+      "required_roles": ["quant_analyst"],
+      "optional_roles": [],
+      "parallel": false,
+      "required_inputs": ["evidence", "datasets"],
+      "expected_outputs": ["metric", "artifact"],
+      "timeout_s": 45,
+      "on_seat_failure": "fail_stage",
+      "ui_panels": ["quant_notebook", "research_summary"]
+    },
+    {
+      "id": "debate",
+      "purpose": "Generate competing claims using gathered evidence and quant validation.",
+      "required_roles": ["bull_researcher", "bear_researcher"],
+      "optional_roles": ["aggressive_analyst", "conservative_analyst", "neutral_analyst"],
+      "parallel": true,
+      "required_inputs": ["evidence", "metric"],
+      "expected_outputs": ["claim"],
+      "timeout_s": 40,
+      "on_seat_failure": "skip_optional_fail_if_bull_or_bear_absent",
+      "ui_panels": ["debate_strip", "evidence_workspace"]
+    },
+    {
+      "id": "synthesize",
+      "purpose": "Produce the combined research recommendation.",
+      "required_roles": ["research_manager"],
+      "optional_roles": [],
+      "parallel": false,
+      "required_inputs": ["evidence", "claim", "metric"],
+      "expected_outputs": ["decision", "artifact"],
+      "timeout_s": 20,
+      "on_seat_failure": "fail_stage",
+      "ui_panels": ["recommendation_panel"]
+    },
+    {
+      "id": "risk_review",
+      "purpose": "Apply mandate and portfolio constraints to the draft decision.",
+      "required_roles": ["risk_manager"],
+      "optional_roles": [],
+      "parallel": false,
+      "required_inputs": ["decision", "constraint"],
+      "expected_outputs": ["constraint", "decision", "artifact"],
+      "timeout_s": 20,
+      "on_seat_failure": "fail_stage",
+      "ui_panels": ["risk_gate"]
+    },
+    {
+      "id": "pm_review",
+      "purpose": "Capture PM approval, rejection, or edits.",
+      "required_roles": ["portfolio_manager"],
+      "optional_roles": [],
+      "parallel": false,
+      "required_inputs": ["decision", "constraint"],
+      "expected_outputs": ["decision"],
+      "timeout_s": 120,
+      "on_seat_failure": "fail_stage",
+      "ui_panels": ["pm_action_panel"]
+    },
+    {
+      "id": "trade_finalize",
+      "purpose": "Turn the approved decision and final constraints into a trade ticket.",
+      "required_roles": ["trader"],
+      "optional_roles": [],
+      "parallel": false,
+      "required_inputs": ["decision", "constraint"],
+      "expected_outputs": ["trade_ticket", "artifact"],
+      "timeout_s": 15,
+      "on_seat_failure": "fail_stage",
+      "ui_panels": ["trader_handoff"]
+    },
+    {
+      "id": "monitor",
+      "purpose": "Track post-decision state and hand back the monitoring plan.",
+      "required_roles": ["trader"],
+      "optional_roles": ["macro_economist", "geopolitical_analyst", "social_analyst"],
+      "parallel": true,
+      "required_inputs": ["trade_ticket"],
+      "expected_outputs": ["artifact"],
+      "timeout_s": 30,
+      "on_seat_failure": "continue_with_warnings",
+      "ui_panels": ["monitor_panel", "transcript"]
+    }
   ]
 }

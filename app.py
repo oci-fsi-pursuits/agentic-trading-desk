@@ -27,7 +27,7 @@ from runtime.common.data_providers import (
 from runtime.common.env_validation import collect_environment_status, load_env_file
 from runtime.common.live_context import build_live_context
 from runtime.common.oci_genai import OciGenAIClient, build_agent_prompt_preview
-from runtime.common.scenario_loader import load_demo_dataset, load_scenario_catalog
+from runtime.common.scenario_loader import load_demo_dataset, load_scenario, load_scenario_catalog
 from runtime.common.service import get_adapter
 from runtime.common.store import RunStore
 from runtime.common.utils import ensure_runs_root, make_id, now_iso
@@ -82,6 +82,11 @@ def parse_debate_depth(raw: str, default: int = 1) -> int:
     except (TypeError, ValueError):
         value = default
     return max(1, min(value, 8))
+
+
+def validate_run_request(runtime: str, scenario: str, seats: list[str]) -> None:
+    adapter = get_adapter(runtime)
+    adapter.resolve_active_seats(load_scenario(scenario), seats or None)
 
 
 def normalize_chart_range(raw: str) -> str:
@@ -782,7 +787,7 @@ class AppHandler(BaseHTTPRequestHandler):
                 breaking_news_mode = "manual"
             debate_depth = parse_debate_depth(params.get('debate_depth', ['1'])[0], default=1)
             try:
-                get_adapter(runtime)
+                validate_run_request(runtime, scenario, seats)
             except (KeyError, ValueError) as exc:
                 return self._send_json({"error": "run_failed", "message": str(exc)}, status=400)
             run_id = make_id("run")

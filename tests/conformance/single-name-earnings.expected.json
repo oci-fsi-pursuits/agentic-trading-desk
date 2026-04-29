@@ -9,8 +9,7 @@
     "risk_review",
     "pm_review",
     "trade_finalize",
-    "monitor",
-    "completed"
+    "monitor"
   ],
   "required_event_types": [
     "run.started",

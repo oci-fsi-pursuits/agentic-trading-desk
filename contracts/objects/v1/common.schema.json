@@ -45,8 +45,8 @@
       "type": "string",
       "enum": [
         "gather",
-        "debate",
         "quantify",
+        "debate",
         "synthesize",
         "risk_review",
         "pm_review",

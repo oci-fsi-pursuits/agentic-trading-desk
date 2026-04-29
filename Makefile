@@ -6,8 +6,11 @@ export-spec:
 	$(PYTHON) authoring/export_spec.py
 
 validate: export-spec
-	$(PYTHON) -m py_compile app.py authoring/export_spec.py runtime/common/types.py runtime/common/registry.py runtime/common/utils.py runtime/common/scenario_loader.py runtime/common/quant_runner.py runtime/common/store.py runtime/common/engine.py runtime/common/service.py runtime/common/contract_validation.py runtime/common/env_validation.py runtime/common/agent_prompts.py runtime/common/oci_genai.py runtime/wayflow/adapter.py runtime/langgraph/adapter.py tests/conformance/run_conformance.py tests/validate_repo.py tests/validate_runtime_contracts.py tests/validate_deployment_hardening.py tests/validate_agent_prompts.py
+	$(PYTHON) -m py_compile app.py authoring/export_spec.py runtime/common/types.py runtime/common/agent_spec.py runtime/common/registry.py runtime/common/utils.py runtime/common/scenario_loader.py runtime/common/quant_runner.py runtime/common/store.py runtime/common/engine.py runtime/common/service.py runtime/common/contract_validation.py runtime/common/env_validation.py runtime/common/agent_prompts.py runtime/common/oci_genai.py runtime/wayflow/adapter.py runtime/langgraph/adapter.py tests/conformance/run_conformance.py tests/validate_repo.py tests/validate_runtime_contracts.py tests/validate_deployment_hardening.py tests/validate_agent_prompts.py tests/validate_agent_spec.py tests/validate_store.py tests/validate_app_run_start.py
 	$(PYTHON) tests/validate_repo.py
+	$(PYTHON) tests/validate_agent_spec.py
+	$(PYTHON) tests/validate_store.py
+	$(PYTHON) tests/validate_app_run_start.py
 	$(PYTHON) tests/validate_runtime_contracts.py
 	$(PYTHON) tests/validate_deployment_hardening.py
 	$(PYTHON) tests/validate_agent_prompts.py

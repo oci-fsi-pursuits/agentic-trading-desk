@@ -396,6 +396,128 @@
       margin-top: 6px;
     }
 
+    .volume-chart-wrap {
+      margin-top: 8px;
+      border: 1px solid #d6dfed;
+      border-radius: 10px;
+      background: linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%);
+      padding: 4px 7px 5px;
+      height: 78px;
+    }
+
+    #stock-volume-chart {
+      width: 100%;
+      height: 64px;
+      display: block;
+    }
+
+    .chart-volume-bar {
+      fill: rgba(40, 89, 168, 0.35);
+    }
+
+    .chart-volume-bar.current {
+      fill: rgba(40, 89, 168, 0.65);
+    }
+
+    .volume-profile-wrap {
+      margin-top: 8px;
+      border: 1px solid #d6dfed;
+      border-radius: 10px;
+      background: #fbfdff;
+      padding: 8px 9px 8px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .volume-profile-head {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #55739d;
+    }
+
+    .volume-profile-bars {
+      display: grid;
+      gap: 5px;
+    }
+
+    .vp-row {
+      display: grid;
+      grid-template-columns: 68px minmax(0, 1fr) 62px;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: #4f678c;
+    }
+
+    .vp-row.current {
+      color: #1f3f70;
+      font-weight: 700;
+    }
+
+    .vp-track {
+      height: 8px;
+      border-radius: 999px;
+      background: #e5edf8;
+      overflow: hidden;
+    }
+
+    .vp-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #7ea5d8, #2f6ac7);
+      min-width: 2px;
+    }
+
+    .vp-row.current .vp-fill {
+      background: linear-gradient(90deg, #7aa56d, #2d7f42);
+    }
+
+    .pair-spread-wrap {
+      margin-top: 8px;
+      border: 1px solid #d6dfed;
+      border-radius: 10px;
+      background: #fbfdff;
+      padding: 8px 9px 8px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .pair-spread-head {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #55739d;
+    }
+
+    #pair-spread-chart {
+      width: 100%;
+      height: 108px;
+      display: block;
+    }
+
+    .chart-spread-line {
+      fill: none;
+      stroke: #0c4da2;
+      stroke-width: 2;
+    }
+
+    .chart-spread-mean {
+      fill: none;
+      stroke: #2f6ac7;
+      stroke-width: 1.5;
+      stroke-dasharray: 4 4;
+    }
+
+    .chart-spread-band {
+      fill: none;
+      stroke: #8aa8d4;
+      stroke-width: 1.3;
+      stroke-dasharray: 3 4;
+    }
+
     .vote-pills {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1012,8 +1134,15 @@
       color: #25324b;
       line-height: 1.5;
       min-height: 32px;
+      white-space: pre-wrap;
       overflow-wrap: anywhere;
       word-break: break-word;
+    }
+
+    .breaking-news-prefix {
+      color: #c62828;
+      font-weight: 800;
+      letter-spacing: 0.02em;
     }
 
     .consensus-score {
@@ -1565,8 +1694,9 @@
           <div class="controls" id="top-controls">
             <label>Breaking News
               <select id="breaking-news">
-                <option value="0" selected>Off</option>
-                <option value="1">Simulate Reroute</option>
+                <option value="off" selected>Off</option>
+                <option value="manual">Manual Trigger</option>
+                <option value="auto_after_gather">Timed Trigger (After Gather)</option>
               </select>
             </label>
             <label>Debate Depth
@@ -1775,7 +1905,7 @@
           <div id="exposure-preview"></div>
         </article>
 
-        <article class="panel panel-primary" data-phase-panel="phase_5">
+        <article class="panel panel-primary">
           <div class="section-title">Stock Price</div>
           <div class="price-head">
             <span id="stock-price-value">--</span>
@@ -1800,7 +1930,34 @@
             </svg>
           </div>
           <div class="exec-meta" id="stock-chart-status">Waiting for price data.</div>
+          <div class="volume-chart-wrap">
+            <svg id="stock-volume-chart" viewBox="0 0 320 64" preserveAspectRatio="none" aria-label="Stock volume bars">
+              <line class="chart-axis-line" x1="0" y1="60" x2="320" y2="60"></line>
+              <g id="stock-volume-bars"></g>
+            </svg>
+          </div>
+          <div class="exec-meta" id="stock-volume-status">Waiting for volume data.</div>
+          <div class="volume-profile-wrap">
+            <div class="volume-profile-head">Volume Profile (Liquidity by Price)</div>
+            <div id="volume-profile-bars" class="volume-profile-bars"></div>
+            <div class="exec-meta" id="volume-profile-status">Waiting for price-volume profile.</div>
+          </div>
+          <div class="pair-spread-wrap" id="pair-spread-wrap" hidden>
+            <div class="pair-spread-head">Pair Spread</div>
+            <div class="exec-meta" id="pair-spread-meta">Waiting for peer data.</div>
+            <div class="price-chart-wrap" style="height:122px;">
+              <svg id="pair-spread-chart" viewBox="0 0 320 108" preserveAspectRatio="none" aria-label="Pair spread chart">
+                <line class="chart-axis-line" x1="0" y1="92" x2="320" y2="92"></line>
+                <path id="pair-spread-line" class="chart-spread-line" d=""></path>
+                <path id="pair-spread-mean" class="chart-spread-mean" d=""></path>
+                <path id="pair-spread-band-upper" class="chart-spread-band" d=""></path>
+                <path id="pair-spread-band-lower" class="chart-spread-band" d=""></path>
+              </svg>
+            </div>
+            <div class="exec-meta" id="pair-spread-status">Pair spread metrics appear when two tickers are selected.</div>
+          </div>
         </article>
+
       </aside>
     </section>
   </main>

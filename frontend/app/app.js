@@ -125,15 +125,19 @@ const state = {
   lastScenarioInstrument: '',
   stockChart: {
     ticker: '',
+    peerTicker: '',
     timeframe: '30d',
     points: [],
+    peerPoints: [],
     currency: 'USD',
     exchange: '',
     source: '',
+    peerSource: '',
     regularMarketPrice: null,
     previousClose: null,
     loading: false,
     error: '',
+    pairError: '',
     requestId: 0,
     loadedKey: '',
   },
@@ -272,18 +276,113 @@ function newestOf(items) {
   return items.slice().sort((a, b) => timeValue(b.emittedAt) - timeValue(a.emittedAt))[0] || null;
 }
 
+function parseTickerTokens(raw, maxSymbols = 4) {
+  const input = String(raw || '').trim().toUpperCase();
+  const matches = input.match(/[A-Z][A-Z0-9.-]{0,9}/g) || [];
+  const unique = [];
+  for (const token of matches) {
+    if (!unique.includes(token)) unique.push(token);
+    if (unique.length >= maxSymbols) break;
+  }
+  return unique;
+}
+
 function parseTickerRequest() {
-  const raw = String(document.getElementById('ticker')?.value || '').trim().toUpperCase();
-  const matches = raw.match(/[A-Z][A-Z0-9.-]{0,9}/g) || [];
-  if (!matches.length) return 'NVDA';
-  if (matches.length === 1) return matches[0];
-  return `${matches[0]},${matches[1]}`;
+  const tokens = parseTickerTokens(document.getElementById('ticker')?.value || '', 4);
+  if (!tokens.length) return 'NVDA';
+  return tokens.join(',');
 }
 
 function parseTicker() {
   const request = parseTickerRequest();
   const primary = String(request).split(',')[0]?.trim();
   return primary || 'NVDA';
+}
+
+function escapeRegExp(text) {
+  return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function replaceTickerWord(text, fromTicker, toTicker) {
+  const source = String(text || '');
+  const from = String(fromTicker || '').trim().toUpperCase();
+  const to = String(toTicker || '').trim().toUpperCase();
+  if (!source || !from || !to || from === to) return source;
+  const pattern = new RegExp(`\\b${escapeRegExp(from)}\\b`, 'g');
+  return source.replace(pattern, to);
+}
+
+function applyScenarioTickerOverrides(text, scenario, requestedTickers = []) {
+  let output = String(text || '');
+  if (!output) return output;
+  const tickers = Array.isArray(requestedTickers) ? requestedTickers : [];
+  const primaryRequested = String(tickers[0] || '').trim().toUpperCase();
+  const peerRequested = String(tickers[1] || '').trim().toUpperCase();
+  const scenarioPrimary = String(scenario?.instrument || '').trim().toUpperCase();
+  const scenarioPeer = String(
+    scenario?.pair_peer
+      || (Array.isArray(scenario?.instrument_universe) ? scenario.instrument_universe[1] : '')
+      || '',
+  ).trim().toUpperCase();
+
+  if (primaryRequested && scenarioPrimary) {
+    output = replaceTickerWord(output, scenarioPrimary, primaryRequested);
+  }
+  if (peerRequested && scenarioPeer) {
+    output = replaceTickerWord(output, scenarioPeer, peerRequested);
+  }
+
+  const scenarioLabel = String(scenario?.instrument_label || '').trim();
+  if (scenarioLabel && primaryRequested) {
+    const replacement = peerRequested ? `${primaryRequested}/${peerRequested}` : primaryRequested;
+    output = output.replaceAll(scenarioLabel, replacement);
+    output = output.replaceAll(scenarioLabel.replace('/', ' / '), replacement.replace('/', ' / '));
+  }
+  return output;
+}
+
+function normalizeBreakingNewsMode(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'manual' || raw === 'manual_now' || raw === 'manual-now') return 'manual';
+  if (raw === 'auto_after_gather' || raw === 'auto-after-gather' || raw === 'auto' || raw === 'timer' || raw === 'timed') {
+    return 'auto_after_gather';
+  }
+  return 'off';
+}
+
+function breakingNewsModeLabel(value) {
+  const mode = normalizeBreakingNewsMode(value);
+  if (mode === 'manual') return 'manual trigger';
+  if (mode === 'auto_after_gather') return 'timed trigger after gather';
+  return 'off';
+}
+
+function scenarioForcesBreakingNews(scenario = selectedScenario()) {
+  if (!scenario || typeof scenario !== 'object') return false;
+  return Boolean(
+    scenario.demo_mode?.force_breaking_news
+    || scenario.branch_conditions?.force_breaking_news,
+  );
+}
+
+function applyBreakingNewsControlForScenario(scenario = selectedScenario(), preferredMode = 'off') {
+  const node = document.getElementById('breaking-news');
+  const normalizedPreferredMode = normalizeBreakingNewsMode(preferredMode);
+  if (!node) return normalizedPreferredMode;
+  const forceBreakingNews = scenarioForcesBreakingNews(scenario);
+  const offOption = node.querySelector('option[value="off"]');
+  if (offOption) {
+    offOption.disabled = forceBreakingNews;
+    offOption.hidden = forceBreakingNews;
+  }
+  const resolvedMode = forceBreakingNews && normalizedPreferredMode === 'off'
+    ? 'auto_after_gather'
+    : normalizedPreferredMode;
+  node.value = normalizeBreakingNewsMode(resolvedMode);
+  if (forceBreakingNews && normalizeBreakingNewsMode(node.value) === 'off') {
+    node.value = 'auto_after_gather';
+  }
+  return normalizeBreakingNewsMode(node.value);
 }
 
 function formatCurrency(value, currency = 'USD') {
@@ -310,6 +409,19 @@ function formatSignedPercent(value) {
   if (!Number.isFinite(amount)) return '--';
   const prefix = amount > 0 ? '+' : '';
   return `${prefix}${amount.toFixed(2)}%`;
+}
+
+function formatCompactNumber(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return '--';
+  try {
+    return new Intl.NumberFormat('en-US', {
+      notation: 'compact',
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return String(Math.round(amount));
+  }
 }
 
 function clamp(value, min, max) {
@@ -805,30 +917,45 @@ function renderScenarioBrief(scenario = selectedScenario()) {
   const configuredSeatCount = requiredCount + optionalSelected;
   const runRosterCount = state.runRosterSeatIds.length;
   const activeSeats = runStarted() && runRosterCount ? runRosterCount : configuredSeatCount;
-  const tickerMatches = String(document.getElementById('ticker')?.value || '')
-    .trim()
-    .toUpperCase()
-    .match(/[A-Z][A-Z0-9.-]{0,9}/g) || [];
+  const tickerMatches = parseTickerTokens(document.getElementById('ticker')?.value || '', 4);
   const typedTickerLabel = tickerMatches.length
-    ? (tickerMatches.length === 1 ? tickerMatches[0] : `${tickerMatches[0]},${tickerMatches[1]}`)
+    ? tickerMatches.join(',')
     : '';
   const scenarioUniverse = Array.isArray(scenario.instrument_universe) && scenario.instrument_universe.length
     ? scenario.instrument_universe.join(' / ')
     : (scenario.instrument_label || scenario.instrument || 'N/A');
   const instrumentUniverse = typedTickerLabel || scenarioUniverse;
+  const forceBreakingNews = scenarioForcesBreakingNews(scenario);
+  const currentBreakingMode = normalizeBreakingNewsMode(
+    document.getElementById('breaking-news')?.value
+    || (forceBreakingNews ? 'auto_after_gather' : 'off'),
+  );
+  const breakingNewsSummary = forceBreakingNews
+    ? `${breakingNewsModeLabel(currentBreakingMode)} (required)`
+    : breakingNewsModeLabel(currentBreakingMode);
 
   const pmDefault = scenario.demo_mode?.scripted_pm_default || null;
   const pmPosture = pmDefault
     ? `${formatOutcome(pmDefault.outcome || 'needs_follow_up')} · ${pmDefault.position_size_bps || 'N/A'} bps`
     : 'No scripted PM default';
   const pmLabel = scenario.pm_decision_policy ? 'PM Range' : 'PM Default';
+  const scenarioSummaryText = applyScenarioTickerOverrides(
+    scenario.summary || 'No scenario summary provided.',
+    scenario,
+    tickerMatches,
+  );
+  const scenarioThesisText = applyScenarioTickerOverrides(
+    scenario.thesis_prompt || 'No thesis prompt provided.',
+    scenario,
+    tickerMatches,
+  );
 
   node.innerHTML = `
     <div class="scenario-brief-head">
       <div class="scenario-name">${escapeHtml(scenario.name || scenario.scenario_id || 'Scenario')}</div>
       <span class="scenario-runtime">${escapeHtml((scenario.primary_runtime || 'wayflow').toUpperCase())}</span>
     </div>
-    <p class="scenario-summary">${escapeHtml(scenario.summary || 'No scenario summary provided.')}</p>
+    <p class="scenario-summary">${escapeHtml(scenarioSummaryText)}</p>
     <div class="scenario-metrics">
       <div class="scenario-metric">
         <div class="k">Universe</div>
@@ -850,10 +977,11 @@ function renderScenarioBrief(scenario = selectedScenario()) {
     <div class="scenario-pill-row">
       <span class="scenario-pill">${escapeHtml(`${requiredCount} required seats`)}</span>
       <span class="scenario-pill">${escapeHtml(`${optionalSelected}/${optionalCount} optional active`)}</span>
+      <span class="scenario-pill">${escapeHtml(`Breaking trigger: ${breakingNewsSummary}`)}</span>
       <span class="scenario-pill warning">${escapeHtml(`${warningCount} warning constraints`)}</span>
       <span class="scenario-pill blocking">${escapeHtml(`${blockingCount} blocking constraints`)}</span>
     </div>
-    <p class="scenario-thesis">${escapeHtml(scenario.thesis_prompt || 'No thesis prompt provided.')}</p>
+    <p class="scenario-thesis">${escapeHtml(scenarioThesisText)}</p>
     <ul class="scenario-constraints">
       ${
         constraints.length
@@ -866,11 +994,11 @@ function renderScenarioBrief(scenario = selectedScenario()) {
   `;
 }
 
-function buildPricePath(points, minPrice, maxPrice) {
+function buildPricePath(points, minPrice, maxPrice, options = {}) {
   if (!Array.isArray(points) || points.length < 2) return 'M0 98 L320 98';
-  const width = 320;
-  const top = 10;
-  const bottom = 98;
+  const width = Number.isFinite(Number(options.width)) ? Number(options.width) : 320;
+  const top = Number.isFinite(Number(options.top)) ? Number(options.top) : 10;
+  const bottom = Number.isFinite(Number(options.bottom)) ? Number(options.bottom) : 98;
   const span = Math.max(maxPrice - minPrice, 1e-9);
   return points.map((point, idx) => {
     const x = points.length === 1 ? 0 : (idx / (points.length - 1)) * width;
@@ -879,13 +1007,13 @@ function buildPricePath(points, minPrice, maxPrice) {
   }).join(' ');
 }
 
-function buildTrendPath(points, minPrice, maxPrice, startIndex = 0) {
+function buildTrendPath(points, minPrice, maxPrice, startIndex = 0, options = {}) {
   if (!Array.isArray(points) || points.length - startIndex < 2) return '';
   const segment = points.slice(startIndex);
   const count = segment.length;
-  const width = 320;
-  const top = 10;
-  const bottom = 98;
+  const width = Number.isFinite(Number(options.width)) ? Number(options.width) : 320;
+  const top = Number.isFinite(Number(options.top)) ? Number(options.top) : 10;
+  const bottom = Number.isFinite(Number(options.bottom)) ? Number(options.bottom) : 98;
   const span = Math.max(maxPrice - minPrice, 1e-9);
 
   let xSum = 0;
@@ -913,6 +1041,126 @@ function buildTrendPath(points, minPrice, maxPrice, startIndex = 0) {
   return `M ${x0.toFixed(2)} ${y0.toFixed(2)} L ${x1.toFixed(2)} ${y1.toFixed(2)}`;
 }
 
+function buildHorizontalLinePath(value, minPrice, maxPrice, options = {}) {
+  if (!Number.isFinite(value)) return '';
+  const width = Number.isFinite(Number(options.width)) ? Number(options.width) : 320;
+  const top = Number.isFinite(Number(options.top)) ? Number(options.top) : 10;
+  const bottom = Number.isFinite(Number(options.bottom)) ? Number(options.bottom) : 98;
+  const span = Math.max(maxPrice - minPrice, 1e-9);
+  const y = top + ((maxPrice - value) / span) * (bottom - top);
+  return `M 0 ${y.toFixed(2)} L ${width.toFixed(2)} ${y.toFixed(2)}`;
+}
+
+function mean(values) {
+  if (!Array.isArray(values) || !values.length) return null;
+  const cleaned = values.map((item) => Number(item)).filter((item) => Number.isFinite(item));
+  if (!cleaned.length) return null;
+  const total = cleaned.reduce((sum, item) => sum + item, 0);
+  return total / cleaned.length;
+}
+
+function stdev(values) {
+  if (!Array.isArray(values) || values.length < 2) return null;
+  const avg = mean(values);
+  if (!Number.isFinite(avg)) return null;
+  const variance = values
+    .map((item) => Number(item))
+    .filter((item) => Number.isFinite(item))
+    .reduce((sum, item, _idx, arr) => sum + ((item - avg) ** 2), 0) / values.length;
+  return Number.isFinite(variance) ? Math.sqrt(variance) : null;
+}
+
+function activeChartTickers() {
+  const runTokens = parseTickerTokens(state.runTicker || '', 2);
+  const inputTokens = parseTickerTokens(document.getElementById('ticker')?.value || '', 2);
+  if (runTokens.length > 1) return runTokens.slice(0, 2);
+  if (inputTokens.length > 1) return inputTokens.slice(0, 2);
+  if (runTokens.length) return runTokens.slice(0, 1);
+  if (inputTokens.length) return inputTokens.slice(0, 1);
+  return ['NVDA'];
+}
+
+function buildVolumeProfile(points, marketPrice, binCount = 10) {
+  const samples = (Array.isArray(points) ? points : [])
+    .map((item) => ({
+      close: Number(item.close),
+      volume: Number(item.volume),
+    }))
+    .filter((item) => Number.isFinite(item.close) && Number.isFinite(item.volume) && item.volume > 0);
+  if (samples.length < 4) return null;
+  const prices = samples.map((item) => item.close);
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+  const normalizedBins = Math.max(6, Math.min(16, Number(binCount) || 10));
+  const span = Math.max(maxPrice - minPrice, 1e-9);
+  const bins = Array.from({ length: normalizedBins }, (_item, idx) => {
+    const low = minPrice + (idx * span) / normalizedBins;
+    const high = minPrice + ((idx + 1) * span) / normalizedBins;
+    return { low, high, volume: 0, trades: 0 };
+  });
+
+  for (const sample of samples) {
+    const ratio = (sample.close - minPrice) / span;
+    const idx = clamp(Math.floor(ratio * normalizedBins), 0, normalizedBins - 1);
+    bins[idx].volume += sample.volume;
+    bins[idx].trades += 1;
+  }
+
+  let currentIndex = -1;
+  if (Number.isFinite(Number(marketPrice))) {
+    const ratio = (Number(marketPrice) - minPrice) / span;
+    currentIndex = clamp(Math.floor(ratio * normalizedBins), 0, normalizedBins - 1);
+  }
+
+  let peakIndex = 0;
+  for (let idx = 1; idx < bins.length; idx += 1) {
+    if (bins[idx].volume > bins[peakIndex].volume) peakIndex = idx;
+  }
+  return { bins, currentIndex, peakIndex };
+}
+
+function alignPairSeries(primaryPoints, peerPoints) {
+  const left = Array.isArray(primaryPoints) ? primaryPoints : [];
+  const right = Array.isArray(peerPoints) ? peerPoints : [];
+  if (!left.length || !right.length) return [];
+
+  const rightByTs = new Map();
+  for (const point of right) {
+    const ts = Number(point.ts);
+    const close = Number(point.close);
+    if (Number.isFinite(ts) && Number.isFinite(close) && close > 0) {
+      rightByTs.set(ts, close);
+    }
+  }
+
+  const aligned = [];
+  for (const point of left) {
+    const ts = Number(point.ts);
+    const close = Number(point.close);
+    const peerClose = rightByTs.get(ts);
+    if (Number.isFinite(ts) && Number.isFinite(close) && Number.isFinite(peerClose) && close > 0 && peerClose > 0) {
+      aligned.push({ ts, close: close / peerClose });
+    }
+  }
+  if (aligned.length >= 6) return aligned;
+
+  const count = Math.min(left.length, right.length);
+  if (count < 6) return aligned;
+  const fallback = [];
+  const leftOffset = left.length - count;
+  const rightOffset = right.length - count;
+  for (let idx = 0; idx < count; idx += 1) {
+    const l = left[leftOffset + idx];
+    const r = right[rightOffset + idx];
+    const lClose = Number(l?.close);
+    const rClose = Number(r?.close);
+    const ts = Number(l?.ts);
+    if (!Number.isFinite(lClose) || !Number.isFinite(rClose) || lClose <= 0 || rClose <= 0 || !Number.isFinite(ts)) continue;
+    fallback.push({ ts, close: lClose / rClose });
+  }
+  return fallback;
+}
+
 function renderStockPriceChart() {
   const priceNode = document.getElementById('stock-price-value');
   const changeNode = document.getElementById('stock-price-change');
@@ -922,6 +1170,17 @@ function renderStockPriceChart() {
   const longNode = document.getElementById('stock-trend-long');
   const shortNode = document.getElementById('stock-trend-short');
   const timeframeSelect = document.getElementById('stock-timeframe-select');
+  const volumeBarsNode = document.getElementById('stock-volume-bars');
+  const volumeStatusNode = document.getElementById('stock-volume-status');
+  const profileBarsNode = document.getElementById('volume-profile-bars');
+  const profileStatusNode = document.getElementById('volume-profile-status');
+  const pairWrapNode = document.getElementById('pair-spread-wrap');
+  const pairMetaNode = document.getElementById('pair-spread-meta');
+  const pairStatusNode = document.getElementById('pair-spread-status');
+  const pairLineNode = document.getElementById('pair-spread-line');
+  const pairMeanNode = document.getElementById('pair-spread-mean');
+  const pairUpperNode = document.getElementById('pair-spread-band-upper');
+  const pairLowerNode = document.getElementById('pair-spread-band-lower');
   if (!priceNode || !changeNode || !metaNode || !statusNode || !lineNode || !longNode || !shortNode || !timeframeSelect) return;
 
   const chart = state.stockChart;
@@ -931,6 +1190,15 @@ function renderStockPriceChart() {
 
   const points = Array.isArray(chart.points)
     ? chart.points
+      .map((item) => ({
+        ts: Number(item.ts),
+        close: Number(item.close),
+        volume: Number(item.volume),
+      }))
+      .filter((item) => Number.isFinite(item.ts) && Number.isFinite(item.close))
+    : [];
+  const peerPoints = Array.isArray(chart.peerPoints)
+    ? chart.peerPoints
       .map((item) => ({
         ts: Number(item.ts),
         close: Number(item.close),
@@ -955,8 +1223,12 @@ function renderStockPriceChart() {
     if (pctChange < -0.01) changeNode.classList.add('down');
   }
 
-  const ticker = chart.ticker || parseTicker();
-  metaNode.textContent = `${ticker} · ${String(chart.timeframe || '30d').toUpperCase()} · ${chart.exchange || chart.source || 'Market Data'}`;
+  const ticker = chart.ticker || activeChartTickers()[0] || parseTicker();
+  const peerTicker = String(chart.peerTicker || '').trim().toUpperCase();
+  const sourceLabel = chart.exchange || chart.source || 'Market Data';
+  metaNode.textContent = peerTicker
+    ? `${ticker} vs ${peerTicker} · ${String(chart.timeframe || '30d').toUpperCase()} · ${sourceLabel}`
+    : `${ticker} · ${String(chart.timeframe || '30d').toUpperCase()} · ${sourceLabel}`;
 
   if (points.length >= 2) {
     const prices = points.map((item) => item.close);
@@ -983,13 +1255,133 @@ function renderStockPriceChart() {
   } else {
     statusNode.textContent = 'Waiting for price data.';
   }
+
+  if (volumeBarsNode && volumeStatusNode) {
+    const volumes = points.map((point) => (Number.isFinite(point.volume) && point.volume > 0 ? point.volume : 0));
+    const maxVolume = volumes.length ? Math.max(...volumes) : 0;
+    if (points.length >= 2 && maxVolume > 0) {
+      const width = 320;
+      const bottom = 60;
+      const maxHeight = 52;
+      const barWidth = Math.max(1.5, width / Math.max(points.length, 1));
+      volumeBarsNode.innerHTML = points.map((point, idx) => {
+        const volume = Number.isFinite(point.volume) && point.volume > 0 ? point.volume : 0;
+        const ratio = volume / maxVolume;
+        const height = Math.max(1, ratio * maxHeight);
+        const x = idx * barWidth;
+        const y = bottom - height;
+        const className = idx === points.length - 1 ? 'chart-volume-bar current' : 'chart-volume-bar';
+        const widthPx = Math.max(1, barWidth - 0.6);
+        return `<rect class="${className}" x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${widthPx.toFixed(2)}" height="${height.toFixed(2)}"></rect>`;
+      }).join('');
+      const latestVolume = volumes[volumes.length - 1];
+      const avgWindow = volumes.slice(-20).filter((item) => item > 0);
+      const avgVolume = avgWindow.length ? avgWindow.reduce((sum, item) => sum + item, 0) / avgWindow.length : null;
+      volumeStatusNode.textContent = Number.isFinite(avgVolume)
+        ? `Volume: latest ${formatCompactNumber(latestVolume)} vs 20-bar avg ${formatCompactNumber(avgVolume)} shares.`
+        : `Volume: latest ${formatCompactNumber(latestVolume)} shares.`;
+    } else {
+      volumeBarsNode.innerHTML = '';
+      volumeStatusNode.textContent = chart.loading ? 'Loading volume data...' : 'Volume data unavailable for this range.';
+    }
+  }
+
+  if (profileBarsNode && profileStatusNode) {
+    const profile = buildVolumeProfile(points, marketPrice, 10);
+    if (profile && profile.bins.length) {
+      const maxBinVolume = Math.max(...profile.bins.map((bin) => bin.volume), 1);
+      const rows = profile.bins.map((bin, idx) => ({ ...bin, idx })).reverse();
+      profileBarsNode.innerHTML = rows.map((bin) => {
+        const widthPct = clamp((bin.volume / maxBinVolume) * 100, 0, 100);
+        const isCurrent = bin.idx === profile.currentIndex;
+        return `
+          <div class="vp-row ${isCurrent ? 'current' : ''}">
+            <span>${bin.low.toFixed(2)}-${bin.high.toFixed(2)}</span>
+            <div class="vp-track"><div class="vp-fill" style="width:${widthPct.toFixed(1)}%;"></div></div>
+            <span>${formatCompactNumber(bin.volume)}</span>
+          </div>
+        `;
+      }).join('');
+      const currentBucket = profile.currentIndex >= 0 ? profile.bins[profile.currentIndex] : null;
+      const peakBucket = profile.bins[profile.peakIndex];
+      if (currentBucket) {
+        profileStatusNode.textContent = `Current ${formatCurrency(marketPrice, chart.currency || 'USD')} sits in ${currentBucket.low.toFixed(2)}-${currentBucket.high.toFixed(2)} with ${formatCompactNumber(currentBucket.volume)} shares. Peak bucket ${peakBucket.low.toFixed(2)}-${peakBucket.high.toFixed(2)} (${formatCompactNumber(peakBucket.volume)}).`;
+      } else {
+        profileStatusNode.textContent = `Peak liquidity bucket ${peakBucket.low.toFixed(2)}-${peakBucket.high.toFixed(2)} with ${formatCompactNumber(peakBucket.volume)} shares.`;
+      }
+    } else {
+      profileBarsNode.innerHTML = '<div class="exec-meta">Insufficient volume data to build a profile.</div>';
+      profileStatusNode.textContent = chart.loading ? 'Loading price-volume profile...' : 'Price-volume profile unavailable.';
+    }
+  }
+
+  if (pairWrapNode && pairMetaNode && pairStatusNode && pairLineNode && pairMeanNode && pairUpperNode && pairLowerNode) {
+    if (!peerTicker) {
+      pairWrapNode.hidden = true;
+      pairLineNode.setAttribute('d', '');
+      pairMeanNode.setAttribute('d', '');
+      pairUpperNode.setAttribute('d', '');
+      pairLowerNode.setAttribute('d', '');
+    } else {
+      pairWrapNode.hidden = false;
+      const spreadPoints = alignPairSeries(points, peerPoints);
+      if (spreadPoints.length >= 6) {
+        const values = spreadPoints.map((item) => item.close);
+        const avg = mean(values);
+        const sigma = stdev(values) || 0;
+        const latest = values[values.length - 1];
+        const zScore = sigma > 1e-9 ? (latest - avg) / sigma : 0;
+        const upper = Number.isFinite(avg) ? avg + (2 * sigma) : null;
+        const lower = Number.isFinite(avg) ? avg - (2 * sigma) : null;
+        const minSpread = Math.min(...values, Number.isFinite(lower) ? lower : values[0]);
+        const maxSpread = Math.max(...values, Number.isFinite(upper) ? upper : values[0]);
+        const options = { width: 320, top: 8, bottom: 92 };
+        pairLineNode.setAttribute('d', buildPricePath(spreadPoints, minSpread, maxSpread, options));
+        pairMeanNode.setAttribute('d', Number.isFinite(avg) ? buildHorizontalLinePath(avg, minSpread, maxSpread, options) : '');
+        pairUpperNode.setAttribute('d', Number.isFinite(upper) ? buildHorizontalLinePath(upper, minSpread, maxSpread, options) : '');
+        pairLowerNode.setAttribute('d', Number.isFinite(lower) ? buildHorizontalLinePath(lower, minSpread, maxSpread, options) : '');
+        pairMetaNode.textContent = `${ticker}/${peerTicker} ratio · latest ${latest.toFixed(4)} · window ${String(chart.timeframe || '30d').toUpperCase()}`;
+        pairStatusNode.textContent = `Spread z-score ${zScore.toFixed(2)} (mean ${Number(avg).toFixed(4)}, ±2σ ${Number(lower).toFixed(4)} to ${Number(upper).toFixed(4)}).`;
+      } else if (chart.pairError) {
+        pairLineNode.setAttribute('d', '');
+        pairMeanNode.setAttribute('d', '');
+        pairUpperNode.setAttribute('d', '');
+        pairLowerNode.setAttribute('d', '');
+        pairMetaNode.textContent = `${ticker}/${peerTicker} ratio`;
+        pairStatusNode.textContent = chart.pairError;
+      } else {
+        pairLineNode.setAttribute('d', '');
+        pairMeanNode.setAttribute('d', '');
+        pairUpperNode.setAttribute('d', '');
+        pairLowerNode.setAttribute('d', '');
+        pairMetaNode.textContent = `${ticker}/${peerTicker} ratio`;
+        pairStatusNode.textContent = chart.loading ? 'Loading peer chart for spread...' : 'Not enough overlapping points to compute spread.';
+      }
+    }
+  }
+}
+
+async function fetchChartSnapshotByTicker(ticker, timeframe) {
+  const response = await fetch(`/api/market/chart?ticker=${encodeURIComponent(ticker)}&range=${encodeURIComponent(timeframe)}`);
+  let payload = {};
+  try {
+    payload = await response.json();
+  } catch {
+    payload = {};
+  }
+  if (!response.ok) {
+    throw new Error(payload.message || payload.error || `Market data request failed (${response.status})`);
+  }
+  return payload;
 }
 
 async function loadStockPriceChart(options = {}) {
   const force = Boolean(options.force);
-  const ticker = parseTicker();
+  const tickers = activeChartTickers();
+  const ticker = tickers[0] || parseTicker();
+  const peerTicker = tickers.length > 1 ? tickers[1] : '';
   const timeframe = STOCK_TIMEFRAMES.has(state.stockChart.timeframe) ? state.stockChart.timeframe : '30d';
-  const cacheKey = `${ticker}:${timeframe}`;
+  const cacheKey = `${ticker}:${peerTicker}:${timeframe}`;
   if (!force && state.stockChart.loadedKey === cacheKey && state.stockChart.points.length && !state.stockChart.error) {
     return;
   }
@@ -998,17 +1390,17 @@ async function loadStockPriceChart(options = {}) {
   state.stockChart.requestId = requestId;
   state.stockChart.loading = true;
   state.stockChart.error = '';
+  state.stockChart.pairError = '';
   state.stockChart.ticker = ticker;
+  state.stockChart.peerTicker = peerTicker;
+  state.stockChart.peerPoints = [];
+  state.stockChart.peerSource = '';
   state.stockChart.timeframe = timeframe;
   renderStockPriceChart();
 
   try {
-    const response = await fetch(`/api/market/chart?ticker=${encodeURIComponent(ticker)}&range=${encodeURIComponent(timeframe)}`);
-    const payload = await response.json();
+    const payload = await fetchChartSnapshotByTicker(ticker, timeframe);
     if (requestId !== state.stockChart.requestId) return;
-    if (!response.ok) {
-      throw new Error(payload.message || payload.error || `Market data request failed (${response.status})`);
-    }
     const points = Array.isArray(payload.points) ? payload.points : [];
     if (points.length < 2) {
       throw new Error('The selected provider returned insufficient chart points for this range.');
@@ -1019,13 +1411,39 @@ async function loadStockPriceChart(options = {}) {
     state.stockChart.source = payload.source || '';
     state.stockChart.regularMarketPrice = Number(payload.regular_market_price);
     state.stockChart.previousClose = Number(payload.previous_close);
-    state.stockChart.loadedKey = cacheKey;
     state.stockChart.error = '';
+
+    if (peerTicker) {
+      try {
+        const peerPayload = await fetchChartSnapshotByTicker(peerTicker, timeframe);
+        if (requestId !== state.stockChart.requestId) return;
+        const peerPoints = Array.isArray(peerPayload.points) ? peerPayload.points : [];
+        if (peerPoints.length < 2) {
+          throw new Error('Insufficient peer chart points for spread.');
+        }
+        state.stockChart.peerPoints = peerPoints;
+        state.stockChart.peerSource = peerPayload.source || '';
+        state.stockChart.pairError = '';
+      } catch (peerError) {
+        if (requestId !== state.stockChart.requestId) return;
+        state.stockChart.peerPoints = [];
+        state.stockChart.peerSource = '';
+        state.stockChart.pairError = `Pair spread unavailable: ${shortError(peerError?.message || peerError)}`;
+      }
+    } else {
+      state.stockChart.peerPoints = [];
+      state.stockChart.peerSource = '';
+      state.stockChart.pairError = '';
+    }
+    state.stockChart.loadedKey = cacheKey;
   } catch (error) {
     if (requestId !== state.stockChart.requestId) return;
     state.stockChart.points = [];
+    state.stockChart.peerPoints = [];
     state.stockChart.loadedKey = '';
     state.stockChart.source = '';
+    state.stockChart.peerSource = '';
+    state.stockChart.pairError = '';
     state.stockChart.error = `Market data unavailable: ${shortError(error?.message || error)}`;
   } finally {
     if (requestId === state.stockChart.requestId) {
@@ -1139,6 +1557,79 @@ function addHandoff(event, fromRole, toRole, text) {
   state.handoffs = state.handoffs.slice(0, 80);
 }
 
+function ticketLegs(ticket) {
+  return Array.isArray(ticket?.legs)
+    ? ticket.legs.filter((leg) => leg && typeof leg === 'object')
+    : [];
+}
+
+function ticketPrimaryLeg(ticket) {
+  const legs = ticketLegs(ticket);
+  return legs.find((leg) => String(leg.role || '').toLowerCase() === 'primary') || legs[0] || null;
+}
+
+function ticketDisplayInstrument(ticket) {
+  const explicit = String(ticket?.display_instrument || '').trim();
+  if (explicit) return explicit;
+  const inferred = ticketLegs(ticket)
+    .map((leg) => String(leg.instrument || '').trim().toUpperCase())
+    .filter(Boolean);
+  return inferred.join(' / ');
+}
+
+function ticketPrimarySide(ticket) {
+  return String(ticketPrimaryLeg(ticket)?.side || 'HOLD').toUpperCase();
+}
+
+function ticketPrimarySizeBps(ticket) {
+  const value = Number(ticketPrimaryLeg(ticket)?.size_bps);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function ticketGrossExposureBps(ticket) {
+  const explicit = Number(ticket?.exposure?.gross_bps);
+  if (Number.isFinite(explicit)) return explicit;
+  return ticketLegs(ticket).reduce((total, leg) => {
+    const side = String(leg.side || '').toUpperCase();
+    const size = Number(leg.size_bps);
+    if (!Number.isFinite(size) || size <= 0) return total;
+    return side === 'BUY' || side === 'SELL' ? total + size : total;
+  }, 0);
+}
+
+function ticketNetExposureBps(ticket) {
+  const explicit = Number(ticket?.exposure?.net_bps);
+  if (Number.isFinite(explicit)) return explicit;
+  return ticketLegs(ticket).reduce((net, leg) => {
+    const side = String(leg.side || '').toUpperCase();
+    const size = Number(leg.size_bps);
+    if (!Number.isFinite(size) || size <= 0) return net;
+    if (side === 'BUY') return net + size;
+    if (side === 'SELL') return net - size;
+    return net;
+  }, 0);
+}
+
+function ticketEntryConditions(ticket) {
+  return Array.isArray(ticket?.entry_conditions) ? ticket.entry_conditions : [];
+}
+
+function ticketExitConditions(ticket) {
+  return Array.isArray(ticket?.exit_conditions) ? ticket.exit_conditions : [];
+}
+
+function ticketLegSummary(ticket) {
+  const legs = ticketLegs(ticket);
+  if (!legs.length) return 'No leg data';
+  return legs.map((leg) => {
+    const side = String(leg.side || 'HOLD').toUpperCase();
+    const instrument = String(leg.instrument || '').toUpperCase() || 'UNKNOWN';
+    const size = Number(leg.size_bps);
+    const sizeText = Number.isFinite(size) ? `${size} bps` : '0 bps';
+    return `${side} ${instrument} ${sizeText}`;
+  }).join(' | ');
+}
+
 function summarizeObject(objectType, obj) {
   if (!obj || typeof obj !== 'object') return '';
   if (objectType === 'source') return obj.content || obj.title || '';
@@ -1153,7 +1644,9 @@ function summarizeObject(objectType, obj) {
     return `${obj.decision_type || 'decision'} -> ${outcome}${size}`;
   }
   if (objectType === 'trade_ticket') {
-    return `${obj.side || 'HOLD'} ${obj.instrument || ''} ${obj.size_bps || ''} bps`.trim();
+    const display = ticketDisplayInstrument(obj) || 'instrument';
+    const gross = ticketGrossExposureBps(obj);
+    return `${display} · ${ticketLegSummary(obj)} · ${gross} bps gross`;
   }
   return '';
 }
@@ -1230,6 +1723,12 @@ function processEvent(event) {
     state.currentRunId = event.run_id;
     state.runRuntime = payload.runtime || state.runRuntime;
     state.runTicker = payload.ticker || state.runTicker;
+    const hasRequestedBreakingMode = typeof payload.breaking_news_mode_requested === 'string' && payload.breaking_news_mode_requested.trim() !== '';
+    const breakingNewsModeRequested = hasRequestedBreakingMode
+      ? normalizeBreakingNewsMode(payload.breaking_news_mode_requested)
+      : '';
+    const breakingNewsModeEffective = normalizeBreakingNewsMode(payload.breaking_news_mode);
+    const breakingNewsMode = applyBreakingNewsControlForScenario(selectedScenario(), breakingNewsModeEffective);
     if (Array.isArray(payload.active_seat_ids)) {
       state.runRosterSeatIds = normalizeSeatIds(payload.active_seat_ids);
     }
@@ -1237,9 +1736,23 @@ function processEvent(event) {
       document.getElementById('debate-depth').value = String(payload.debate_depth);
     }
     state.runStartedAt = event.emitted_at || state.runStartedAt;
-    appendTranscript(event, `Run started for ${payload.ticker || 'N/A'} on ${payload.runtime || 'unknown runtime'}.`);
+    const modeOverrideNote = (
+      hasRequestedBreakingMode
+      && breakingNewsModeRequested !== breakingNewsModeEffective
+    )
+      ? ` requested ${breakingNewsModeLabel(breakingNewsModeRequested)}, effective ${breakingNewsModeLabel(breakingNewsModeEffective)}`
+      : '';
+    const triggerDelay = Number(payload.breaking_news_delay_s);
+    const timerNote = payload.breaking_news_trigger === 'timer' && Number.isFinite(triggerDelay) && triggerDelay > 0
+      ? ` timer delay ${triggerDelay.toFixed(1)}s`
+      : '';
+    appendTranscript(
+      event,
+      `Run started for ${payload.ticker || 'N/A'} on ${payload.runtime || 'unknown runtime'} (${breakingNewsModeLabel(breakingNewsMode)}${modeOverrideNote}${timerNote}).`,
+    );
     updateRoleSnapshot(event.producer, event.stage_id, `Kicked off run for ${payload.ticker || 'N/A'} on ${payload.runtime || 'runtime'}.`, null, 65, event.emitted_at);
     pushConsensusPoint(event, 'Run started');
+    renderScenarioBrief();
     return;
   }
 
@@ -1497,15 +2010,47 @@ function deriveFinalPackage() {
   state.finalPackage = { decision: pm, ticket };
 }
 
+function linkedDecisionClaims(decision) {
+  const claimBucket = state.objects.claim || {};
+  const supporting = (decision?.linked_claim_ids || [])
+    .map((id) => claimBucket[id])
+    .filter(Boolean);
+  const dissenting = (decision?.dissent_claim_ids || [])
+    .map((id) => claimBucket[id])
+    .filter(Boolean);
+  const seen = new Set();
+  const combined = [];
+  for (const claim of [...supporting, ...dissenting]) {
+    const id = String(claim?.claim_id || '');
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    combined.push(claim);
+  }
+  return { supporting, dissenting, combined };
+}
+
 function deriveVoteBreakdown() {
   const debateClaims = Object.values(state.objects.claim || {})
     .filter((claim) => claim?.provenance?.stage_id === 'debate');
   if (debateClaims.length) {
+    const latestBySeat = new Map();
+    for (const claim of debateClaims) {
+      const seatId = String(claim?.provenance?.producer_role || '').trim().toLowerCase();
+      if (!seatId) continue;
+      const turnIndex = Number.isFinite(Number(claim?.turn_index)) ? Number(claim.turn_index) : 0;
+      const emittedAt = timeValue(claim?.provenance?.emitted_at);
+      const previous = latestBySeat.get(seatId);
+      if (!previous || turnIndex > previous.turnIndex || (turnIndex === previous.turnIndex && emittedAt >= previous.emittedAt)) {
+        latestBySeat.set(seatId, { stance: stanceBucket(claim?.stance || 'neutral'), turnIndex, emittedAt });
+      }
+    }
+
     let longCount = 0;
     let shortCount = 0;
     let neutralCount = 0;
-    for (const claim of debateClaims) {
-      const stance = stanceBucket(claim.stance || 'neutral');
+    const votes = latestBySeat.size ? [...latestBySeat.values()] : debateClaims.map((claim) => ({ stance: stanceBucket(claim?.stance || 'neutral') }));
+    for (const vote of votes) {
+      const stance = vote.stance;
       if (stance === 'long') {
         longCount += 1;
       } else if (stance === 'short') {
@@ -1514,7 +2059,7 @@ function deriveVoteBreakdown() {
         neutralCount += 1;
       }
     }
-    return { longCount, neutralCount, shortCount, total: debateClaims.length, basis: 'claims' };
+    return { longCount, neutralCount, shortCount, total: votes.length, basis: 'seats' };
   }
 
   const seatIds = selectedSeatIds();
@@ -1575,7 +2120,7 @@ function deriveRequiredChanges(decision, ticket) {
   if (decision.position_action === 'trim') {
     changes.push('Reduce existing exposure and reassess after stabilization.');
   }
-  const sizeBps = decision.position_size_bps || ticket?.size_bps;
+  const sizeBps = decision.position_size_bps || ticketPrimarySizeBps(ticket);
   if (sizeBps) {
     changes.push(`Cap initial position at ${sizeBps} bps until post-event confirmation.`);
   }
@@ -1586,7 +2131,7 @@ function deriveRequiredChanges(decision, ticket) {
   linkedConstraints.slice(0, 3).forEach((item) => {
     changes.push(`Must satisfy: ${item}.`);
   });
-  const entryRules = Array.isArray(ticket?.entry_conditions) ? ticket.entry_conditions : [];
+  const entryRules = ticketEntryConditions(ticket);
   if (entryRules.length) {
     changes.push(`Execution gating: ${entryRules.slice(0, 3).join(', ')}.`);
   }
@@ -1605,8 +2150,8 @@ function deriveDecisionDirection(decision, ticket, consensusScore) {
   if (normalizedStance === 'SHORT') return 'SHORT';
   if (normalizedStance === 'NEUTRAL') return 'NEUTRAL';
   if (!decision || decision.outcome === 'rejected') return 'NEUTRAL';
-  if (ticket?.side === 'BUY') return 'LONG';
-  if (ticket?.side === 'SELL') return 'SHORT';
+  if (ticketPrimarySide(ticket) === 'BUY') return 'LONG';
+  if (ticketPrimarySide(ticket) === 'SELL') return 'SHORT';
   if (consensusScore > 0.12) return 'LONG';
   if (consensusScore < -0.12) return 'SHORT';
   return 'NEUTRAL';
@@ -1622,8 +2167,8 @@ function deriveConvictionLabel(consensusScore, decision) {
 
 function parseTargetStop(ticket) {
   const conditions = [
-    ...(Array.isArray(ticket?.entry_conditions) ? ticket.entry_conditions : []),
-    ...(Array.isArray(ticket?.exit_conditions) ? ticket.exit_conditions : []),
+    ...ticketEntryConditions(ticket),
+    ...ticketExitConditions(ticket),
   ].map((item) => String(item || ''));
   let target = '';
   let stop = '';
@@ -1641,7 +2186,7 @@ function parseTargetStop(ticket) {
 }
 
 function inferSector(ticker) {
-  const normalized = String(ticker || '').toUpperCase();
+  const normalized = String(ticker || '').toUpperCase().replace(/\s+/g, '');
   if (normalized.includes('NVDA/AMD')) return 'Semis Pair';
   const map = {
     NVDA: 'Semiconductors',
@@ -1664,15 +2209,20 @@ function renderExposurePreview() {
     node.innerHTML = '<div class="section-subtitle">Exposure preview appears after PM decision and ticket finalization.</div>';
     return;
   }
-  const sizeBps = Number(decision.position_size_bps || ticket.size_bps || 0);
+  const pairTicket = ticket?.ticket_type === 'pair_trade';
+  const pairNetBps = ticketNetExposureBps(ticket);
+  const sizeBps = pairTicket
+    ? Math.abs(pairNetBps)
+    : Number(decision.position_size_bps || ticketPrimarySizeBps(ticket) || 0);
   const consensus = deriveConsensusScore();
   const direction = deriveDecisionDirection(decision, ticket, consensus);
   const sign = direction === 'SHORT' ? -1 : direction === 'LONG' ? 1 : 0;
-  const deltaPct = (sizeBps / 100) * sign;
-  const sector = inferSector(ticket.instrument || state.runTicker);
+  const directionalSign = pairTicket ? Math.sign(pairNetBps) : sign;
+  const deltaPct = pairTicket ? (pairNetBps / 100) : ((sizeBps / 100) * sign);
+  const sector = inferSector(ticketDisplayInstrument(ticket) || state.runTicker);
   const corrConstraint = Object.values(state.objects.constraint || {}).find((item) => item.constraint_id === 'ai_basket_correlation');
   const factorBase = corrConstraint?.value === 'elevated_watch' ? 0.18 : 0.06;
-  const factorDelta = factorBase * sign;
+  const factorDelta = factorBase * directionalSign;
   const formatSigned = (value, suffix = '%') => {
     const n = Number(value || 0);
     const prefix = n > 0 ? '+' : '';
@@ -1717,10 +2267,11 @@ function exportDecisionPacketAction() {
     setStatus('Decision packet not available yet.', 'error');
     return;
   }
+  const linkedClaims = linkedDecisionClaims(decision);
   const payload = {
     generated_at: new Date().toISOString(),
     run_id: state.currentRunId,
-    ticker: state.runTicker || ticket.instrument,
+    ticker: state.runTicker || ticketDisplayInstrument(ticket),
     decision,
     ticket,
     consensus_score: deriveConsensusScore(),
@@ -1729,10 +2280,9 @@ function exportDecisionPacketAction() {
     linked_constraints: (decision.linked_constraint_ids || [])
       .map((id) => state.objects.constraint[id])
       .filter(Boolean),
-    top_claims: (decision.linked_claim_ids || [])
-      .map((id) => state.objects.claim[id])
-      .filter(Boolean)
-      .slice(0, 8),
+    top_claims: linkedClaims.combined.slice(0, 8),
+    supporting_claims: linkedClaims.supporting.slice(0, 8),
+    dissenting_claims: linkedClaims.dissenting.slice(0, 8),
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -1802,11 +2352,58 @@ function renderFlow() {
 }
 
 function cleanAgentNarrative(value) {
-  return String(value || '')
+  const raw = String(value || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
     .replace(/\b(?:about|around|roughly|approximately|~)?\s*\d+\s*words?\b/gi, '')
     .replace(/\(\s*~?\s*\d+\s*words?\s*\)/gi, '')
-    .replace(/\s+/g, ' ')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/gi, '$1')
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/^\s{0,3}#{1,6}\s*/gm, '')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\*{1,3}/g, '')
+    .replace(/_{1,3}/g, '');
+  const normalized = raw
+    .split('\n')
+    .map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return '';
+      if (/^\|?[\s:-]+\|[\s|:-]*$/.test(trimmed)) return '';
+      if (trimmed.includes('|') && (trimmed.match(/\|/g) || []).length >= 2) {
+        const cells = trimmed
+          .split('|')
+          .map((cell) => cell.trim())
+          .filter(Boolean);
+        return cells.join(' · ');
+      }
+      if (/^[-*]\s+/.test(trimmed)) {
+        return `• ${trimmed.replace(/^[-*]\s+/, '')}`;
+      }
+      return trimmed;
+    })
+    .join('\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
+  return normalized;
+}
+
+function formatAgentTextHtml(value) {
+  const text = cleanAgentNarrative(value);
+  if (!text) return '';
+  return text
+    .split('\n')
+    .map((line) => {
+      const trimmed = String(line || '').trim();
+      if (!trimmed) return '';
+      const breakingMatch = trimmed.match(/^breaking news\s*-\s*(.*)$/i);
+      if (breakingMatch) {
+        const headline = String(breakingMatch[1] || '').trim();
+        return `<span class="breaking-news-prefix">BREAKING NEWS -</span>${headline ? ` ${escapeHtml(headline)}` : ''}`;
+      }
+      return escapeHtml(trimmed);
+    })
+    .join('<br>');
 }
 
 function latestRoleObject(bucket, roleId, stageId = '') {
@@ -1821,11 +2418,18 @@ function latestRoleObject(bucket, roleId, stageId = '') {
 }
 
 function buildAgentPerspectiveText(seatId, snapshot) {
+  const latestGatherSource = latestRoleObject(state.objects.source, seatId, 'gather');
+  if (
+    seatId === 'news_analyst'
+    && latestGatherSource?.content
+    && /breaking news\s*-/i.test(String(latestGatherSource.content))
+  ) {
+    return cleanAgentNarrative(latestGatherSource.content);
+  }
   const latestGatherEvidence = latestRoleObject(state.objects.evidence, seatId, 'gather');
   if (latestGatherEvidence?.summary) {
     return cleanAgentNarrative(latestGatherEvidence.summary);
   }
-  const latestGatherSource = latestRoleObject(state.objects.source, seatId, 'gather');
   if (latestGatherSource?.content) {
     return cleanAgentNarrative(latestGatherSource.content);
   }
@@ -1840,9 +2444,7 @@ function gatherAnalystSeatIds() {
     ? state.runRosterSeatIds
     : selectedSeatIds();
   const gatherRoster = roster.filter((seatId) => GATHER_ANALYST_SEATS.includes(seatId));
-  const activeNow = stageActiveSeatIds('gather').filter((seatId) => gatherRoster.includes(seatId));
-  const inactive = gatherRoster.filter((seatId) => !activeNow.includes(seatId));
-  if (activeNow.length || inactive.length) return [...activeNow, ...inactive];
+  if (gatherRoster.length) return gatherRoster;
   const fallback = selectedSeatIds().filter((seatId) => GATHER_ANALYST_SEATS.includes(seatId));
   return fallback.length ? fallback : selectedSeatIds().slice(0, 4);
 }
@@ -1866,7 +2468,7 @@ function renderCommittee() {
     const activity = gatherLive
         ? (gatherActiveSeats.includes(seatId) ? 'active now (Information Gathering)' : 'waiting for information-gathering update')
       : gatherDone
-        ? 'phase 1 output locked for downstream phases'
+        ? ''
         : runIsStarted
           ? 'queued for information gathering'
           : 'idle';
@@ -1878,9 +2480,9 @@ function renderCommittee() {
         </div>
         <div class="agent-meta">
           <span>${escapeHtml(stage)}</span>
-          <span>${escapeHtml(activity)} · Confidence ${escapeHtml(confidence)}</span>
+          <span>${activity ? `${escapeHtml(activity)} · ` : ''}Confidence ${escapeHtml(confidence)}</span>
         </div>
-        <div class="agent-text">${escapeHtml(text)}</div>
+        <div class="agent-text">${formatAgentTextHtml(text)}</div>
       </article>
     `;
   }).join('') || '<div class="section-subtitle">Research summaries will appear here once the desk starts gathering inputs.</div>';
@@ -1929,7 +2531,7 @@ function renderQuantAnalystPanel() {
         <span>${escapeHtml(stage)}</span>
         <span>${escapeHtml(activity)} · Confidence ${escapeHtml(confidence)}</span>
       </div>
-      <div class="agent-text">${escapeHtml(text)}</div>
+      <div class="agent-text">${formatAgentTextHtml(text)}</div>
     </article>
   `;
 }
@@ -1963,11 +2565,10 @@ function buildSynthesisNarrative() {
   const synthDecision = Object.values(state.objects.decision || {})
     .filter((decision) => decision?.provenance?.stage_id === 'synthesize')
     .sort((a, b) => timeValue(b.provenance?.emitted_at) - timeValue(a.provenance?.emitted_at))[0] || null;
-  const linkedClaims = (synthDecision?.linked_claim_ids || [])
-    .map((claimId) => state.objects.claim[claimId])
-    .filter(Boolean);
-  const linkedLong = linkedClaims.filter((claim) => stanceBucket(claim.stance) === 'long').length;
-  const linkedShort = linkedClaims.filter((claim) => stanceBucket(claim.stance) === 'short').length;
+  const synthLinkedClaims = linkedDecisionClaims(synthDecision);
+  const linkedClaims = synthLinkedClaims.combined;
+  const linkedLong = synthLinkedClaims.supporting.length;
+  const linkedShort = synthLinkedClaims.dissenting.length;
 
   const stageSummaryRaw = cleanAgentNarrative(state.stageMeta.synthesize?.outputSummary || '');
   const stageSummary = /desk recommendation package prepared for risk review/i.test(stageSummaryRaw) ? '' : stageSummaryRaw;
@@ -2204,11 +2805,11 @@ function renderExecutionAndMonitoring() {
   const warningConstraints = constraints
     .filter((item) => String(item?.severity || '').toLowerCase() === 'warning')
     .map((item) => item.label || item.constraint_id || 'Warning constraint');
-  const entryConditions = Array.isArray(ticket?.entry_conditions) ? ticket.entry_conditions : [];
-  const exitConditions = Array.isArray(ticket?.exit_conditions) ? ticket.exit_conditions : [];
+  const entryConditions = ticketEntryConditions(ticket);
+  const exitConditions = ticketExitConditions(ticket);
 
   const executionFallback = ticket
-    ? `Ticket: ${ticket.side || 'HOLD'} ${ticket.instrument || ''} ${ticket.size_bps || ''} bps · Entry: ${(ticket.entry_conditions || []).join(', ') || 'n/a'} · Exit: ${(ticket.exit_conditions || []).join(', ') || 'n/a'}`
+    ? `Ticket: ${ticketDisplayInstrument(ticket)} · ${ticketLegSummary(ticket)} · Entry: ${entryConditions.join(', ') || 'n/a'} · Exit: ${exitConditions.join(', ') || 'n/a'}`
     : (latestArtifactForStage('trade_finalize', 'trade_ticket')?.label || '');
   const monitoringFallback = latestArtifactForStage('monitor', 'monitoring_plan')?.label || '';
 
@@ -2218,7 +2819,7 @@ function renderExecutionAndMonitoring() {
   const monitoringAction = monitoringText || 'Awaiting monitoring-plan output. Triggers and review cadence will appear in phase 5.';
 
   const executionContext = ticket
-    ? `${ticket.side || 'HOLD'} ${ticket.instrument || 'instrument'} · ${ticket.size_bps || 'N/A'} bps · ${ticket.time_horizon || 'event_tactical'}`
+    ? `${ticketDisplayInstrument(ticket) || 'instrument'} · ${ticketLegSummary(ticket)} · ${ticket.time_horizon || 'event_tactical'}`
     : 'No ticket context yet.';
   const executionCheckpoint = executionMeta.completedAt
     ? `Execution finalized at ${formatTime(executionMeta.completedAt)}.`
@@ -2227,7 +2828,7 @@ function renderExecutionAndMonitoring() {
       : 'Execution stage is queued behind PM decision.';
 
   const monitoringContext = ticket
-    ? `${ticket.instrument || 'instrument'} monitoring after ${ticket.side || 'HOLD'} setup.`
+    ? `${ticketDisplayInstrument(ticket) || 'instrument'} monitoring after ${ticketPrimarySide(ticket)} primary-leg setup.`
     : 'Monitoring context unlocks after trade finalize.';
   const monitoringCheckpoint = monitoringMeta.completedAt
     ? `Monitoring plan completed at ${formatTime(monitoringMeta.completedAt)}.`
@@ -2341,10 +2942,14 @@ function renderDecisionPacket() {
     return;
   }
 
-  const evidenceTitles = (decision.linked_claim_ids || [])
-    .map((claimId) => state.objects.claim[claimId])
-    .filter(Boolean)
+  const decisionClaims = linkedDecisionClaims(decision);
+  const supportingTitles = decisionClaims.supporting
     .map((claim) => claim.statement)
+    .filter(Boolean)
+    .slice(0, 3);
+  const dissentingTitles = decisionClaims.dissenting
+    .map((claim) => claim.statement)
+    .filter(Boolean)
     .slice(0, 3);
 
   const riskItems = (decision.linked_constraint_ids || [])
@@ -2363,7 +2968,7 @@ function renderDecisionPacket() {
     ? state.phasePmConfidence
     : (Number.isFinite(state.roleSnapshots.portfolio_manager?.confidence) ? normalizeConfidence(state.roleSnapshots.portfolio_manager.confidence) : null);
   const pmConfidence = Number.isFinite(pmConfidenceValue) ? `${pmConfidenceValue.toFixed(0)}%` : '--';
-  const weightPct = bpsToPercentString(decision.position_size_bps || ticket?.size_bps);
+  const weightPct = bpsToPercentString(decision.position_size_bps || ticketPrimarySizeBps(ticket));
   const targetStop = parseTargetStop(ticket);
 
   container.innerHTML = `
@@ -2379,17 +2984,21 @@ function renderDecisionPacket() {
       <div class="decision-metric"><div class="k">Suggested Weight</div><div class="v">${escapeHtml(weightPct)}</div></div>
       <div class="decision-metric"><div class="k">Target (Optional)</div><div class="v">${escapeHtml(targetStop.target)}</div></div>
       <div class="decision-metric"><div class="k">Stop (Optional)</div><div class="v">${escapeHtml(targetStop.stop)}</div></div>
-      <div class="decision-metric"><div class="k">Instrument / Horizon</div><div class="v">${escapeHtml(`${ticket?.instrument || 'N/A'} · ${ticket?.time_horizon || 'event_tactical'}`)}</div></div>
+      <div class="decision-metric"><div class="k">Instrument / Horizon</div><div class="v">${escapeHtml(`${ticketDisplayInstrument(ticket) || 'N/A'} · ${ticket?.time_horizon || 'event_tactical'}`)}</div></div>
     </div>
     <div class="columns-2">
       <div class="ticket-box">
         <div class="section-title" style="margin-bottom:6px;">Top Supporting Claims</div>
-        <ul>${evidenceTitles.length ? evidenceTitles.map((item) => `<li>${escapeHtml(item)}</li>`).join('') : '<li>No claim linkage available.</li>'}</ul>
+        <ul>${supportingTitles.length ? supportingTitles.map((item) => `<li>${escapeHtml(item)}</li>`).join('') : '<li>No supporting claim linkage available.</li>'}</ul>
       </div>
       <div class="ticket-box">
-        <div class="section-title" style="margin-bottom:6px;">Top Risk Constraints</div>
-        <ul>${riskItems.length ? riskItems.map((item) => `<li>${escapeHtml(item)}</li>`).join('') : '<li>No constraint linkage available.</li>'}</ul>
+        <div class="section-title" style="margin-bottom:6px;">Top Counter Claims</div>
+        <ul>${dissentingTitles.length ? dissentingTitles.map((item) => `<li>${escapeHtml(item)}</li>`).join('') : '<li>No dissenting claim linkage available.</li>'}</ul>
       </div>
+    </div>
+    <div class="ticket-box">
+      <div class="section-title" style="margin-bottom:6px;">Top Risk Constraints</div>
+      <ul>${riskItems.length ? riskItems.map((item) => `<li>${escapeHtml(item)}</li>`).join('') : '<li>No constraint linkage available.</li>'}</ul>
     </div>
     <div class="ticket-box">
       <div class="section-title" style="margin-bottom:6px;">What Changed</div>
@@ -2444,8 +3053,9 @@ function renderConclusion() {
     : decision.outcome === 'approved_with_changes'
       ? 'outcome-banner warning'
       : 'outcome-banner good';
-  const ticker = state.runTicker || ticket?.instrument || 'N/A';
-  const size = decision.position_size_bps || ticket?.size_bps || 'N/A';
+  const ticker = state.runTicker || ticketDisplayInstrument(ticket) || 'N/A';
+  const size = decision.position_size_bps || (ticket?.ticket_type === 'pair_trade' ? ticketGrossExposureBps(ticket) : ticketPrimarySizeBps(ticket)) || 'N/A';
+  const sizeLabel = ticket?.ticket_type === 'pair_trade' ? `${size} gross bps` : `${size} bps`;
   const horizon = ticket?.time_horizon || 'event_tactical';
   const confidenceDetail = businessConfidenceDetail();
   const confidenceText = Number.isFinite(confidenceDetail.percent)
@@ -2455,7 +3065,7 @@ function renderConclusion() {
   node.className = bannerClass;
   node.innerHTML = `
     <div class="outcome-title">Desk Verdict: ${escapeHtml(outcome)}</div>
-    <div class="outcome-meta">${escapeHtml(String(ticker))} · Size ${escapeHtml(String(size))} bps · Horizon ${escapeHtml(horizon)}</div>
+    <div class="outcome-meta">${escapeHtml(String(ticker))} · Size ${escapeHtml(String(sizeLabel))} · Horizon ${escapeHtml(horizon)}</div>
     <div class="outcome-meta">Committee vote: ${votes.longCount} long · ${votes.neutralCount} neutral · ${votes.shortCount} short</div>
     <div class="outcome-meta">Desk confidence: ${escapeHtml(confidenceText)}</div>
     <div>${escapeHtml(decisionMeaning(decision))}</div>
@@ -2752,7 +3362,8 @@ function renderSeats(scenario) {
   const tickerInput = document.getElementById('ticker');
   if (scenarioTicker) tickerInput.value = scenarioTicker;
   state.lastScenarioInstrument = scenarioTicker;
-  document.getElementById('breaking-news').value = scenario.demo_mode?.force_breaking_news ? '1' : '0';
+  const defaultBreakingMode = scenarioForcesBreakingNews(scenario) ? 'auto_after_gather' : 'off';
+  applyBreakingNewsControlForScenario(scenario, defaultBreakingMode);
   syncSeatEditorState();
   renderScenarioBrief(scenario);
   renderRunRosterSummary();
@@ -2989,16 +3600,19 @@ async function runCommittee() {
 
     const seatIds = selectedSeatIds();
     const ticker = parseTickerRequest();
-    const breakingNews = document.getElementById('breaking-news').value === '1';
+    const breakingNewsMode = applyBreakingNewsControlForScenario(scenario, document.getElementById('breaking-news').value);
     const debateDepth = Number(document.getElementById('debate-depth').value || '1');
 
     resetState();
     state.runRosterSeatIds = normalizeSeatIds(seatIds);
     void loadStockPriceChart({ force: true });
-    setStatus(`Starting ${runtime} run for ${ticker} with ${seatIds.length} seats, debate depth ${debateDepth}${breakingNews ? ' (breaking-news drill)' : ''}...`);
+    setStatus(
+      `Starting ${runtime} run for ${ticker} with ${seatIds.length} seats, debate depth ${debateDepth}, breaking-news ${breakingNewsModeLabel(breakingNewsMode)}...`,
+    );
 
     const params = new URLSearchParams({ runtime, scenario: scenarioId, ticker });
-    if (breakingNews) params.append('breaking_news', '1');
+    params.append('breaking_news_mode', breakingNewsMode);
+    if (breakingNewsMode === 'manual') params.append('breaking_news', '1');
     params.append('debate_depth', String(debateDepth));
     seatIds.forEach((seatId) => params.append('seat', seatId));
     const startResponse = await fetch(`/api/run/start?${params.toString()}`);
@@ -3056,15 +3670,25 @@ async function loadReplay() {
     }
 
     ingestSummary(payload, { includeObjects: false });
+    if (payload.summary?.scenario_id) {
+      const replayScenario = state.scenarios.find((item) => item.scenario_id === payload.summary.scenario_id);
+      if (replayScenario) {
+        document.getElementById('scenario').value = replayScenario.scenario_id;
+        renderSeats(replayScenario);
+      }
+    }
 
     if (payload.summary?.ticker) {
       document.getElementById('ticker').value = payload.summary.ticker;
     } else if (payload.summary?.tickers?.length) {
       document.getElementById('ticker').value = payload.summary.tickers[0];
     }
-    if (typeof payload.summary?.breaking_news_reroute === 'boolean') {
-      document.getElementById('breaking-news').value = payload.summary.breaking_news_reroute ? '1' : '0';
+    if (payload.summary?.breaking_news_mode) {
+      document.getElementById('breaking-news').value = normalizeBreakingNewsMode(payload.summary.breaking_news_mode);
+    } else if (typeof payload.summary?.breaking_news_reroute === 'boolean') {
+      document.getElementById('breaking-news').value = payload.summary.breaking_news_reroute ? 'auto_after_gather' : 'off';
     }
+    applyBreakingNewsControlForScenario(selectedScenario(), document.getElementById('breaking-news').value);
     if (Number.isFinite(Number(payload.summary?.debate_depth))) {
       document.getElementById('debate-depth').value = String(payload.summary.debate_depth);
     }
@@ -3310,6 +3934,10 @@ document.getElementById('scenario').addEventListener('change', (event) => {
   if (selected) {
     renderSeats(selected);
   }
+});
+document.getElementById('breaking-news').addEventListener('change', () => {
+  applyBreakingNewsControlForScenario(selectedScenario(), document.getElementById('breaking-news').value);
+  renderScenarioBrief();
 });
 document.getElementById('optional-seats').addEventListener('change', () => {
   renderScenarioBrief();

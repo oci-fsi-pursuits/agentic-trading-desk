@@ -24,13 +24,64 @@ revision_score = round(sum(revisions[-3:]) / 3, 3)
 volatility = round(statistics.pstdev(returns) * 100, 3)
 crowding = round(dataset["sentiment_score"] * dataset["ai_basket_correlation"], 3)
 signal = round(momentum_20d * 0.35 + revision_score * 10 * 0.40 - crowding * 10 * 0.25, 3)
+pair_mode = bool(dataset.get("pair_mode"))
+peer_series_map = dataset.get("peer_price_series") or {}
+peer_tickers = list(dataset.get("peer_tickers") or [])
+pair_metrics = {
+  "pair_mode": pair_mode,
+  "pair_peer": "",
+  "pair_correlation": None,
+  "spread_momentum_pct": None,
+  "spread_volatility_pct": None,
+  "relative_vol_ratio": None
+}
+if pair_mode and isinstance(peer_series_map, dict):
+  selected_peer = ""
+  for peer in peer_tickers:
+    if peer in peer_series_map:
+      selected_peer = peer
+      break
+  if not selected_peer and peer_series_map:
+    selected_peer = list(peer_series_map.keys())[0]
+  peer_prices = list(peer_series_map.get(selected_peer) or [])
+  pair_metrics["pair_peer"] = selected_peer
+  if len(peer_prices) >= 2 and len(prices) >= 2:
+    window = min(len(prices), len(peer_prices), 60)
+    left = [float(v) for v in prices[-window:]]
+    right = [float(v) for v in peer_prices[-window:]]
+    left_returns = [(b - a) / a for a, b in zip(left[:-1], left[1:]) if a]
+    right_returns = [(b - a) / a for a, b in zip(right[:-1], right[1:]) if a]
+    if len(left_returns) == len(right_returns) and len(left_returns) >= 3:
+      left_mean = sum(left_returns) / len(left_returns)
+      right_mean = sum(right_returns) / len(right_returns)
+      cov = sum((a - left_mean) * (b - right_mean) for a, b in zip(left_returns, right_returns))
+      left_var = sum((a - left_mean) ** 2 for a in left_returns)
+      right_var = sum((b - right_mean) ** 2 for b in right_returns)
+      if left_var > 0 and right_var > 0:
+        pair_metrics["pair_correlation"] = round(max(-1.0, min(1.0, cov / ((left_var * right_var) ** 0.5))), 4)
+      left_vol = statistics.pstdev(left_returns) if len(left_returns) >= 2 else 0.0
+      right_vol = statistics.pstdev(right_returns) if len(right_returns) >= 2 else 0.0
+      if right_vol > 0:
+        pair_metrics["relative_vol_ratio"] = round(left_vol / right_vol, 4)
+    spread = [a - b for a, b in zip(left, right)]
+    if len(spread) >= 2 and spread[0] != 0:
+      pair_metrics["spread_momentum_pct"] = round((spread[-1] - spread[0]) / abs(spread[0]) * 100, 3)
+      spread_returns = [(b - a) / abs(a) for a, b in zip(spread[:-1], spread[1:]) if abs(a) > 1e-9]
+      if len(spread_returns) >= 2:
+        pair_metrics["spread_volatility_pct"] = round(statistics.pstdev(spread_returns) * 100, 3)
 out = {
   "momentum_20d_pct": momentum_20d,
   "estimate_revision_score": revision_score,
   "return_volatility_pct": volatility,
   "crowding_score": crowding,
   "composite_signal": signal,
-  "coverage": coverage
+  "coverage": coverage,
+  "pair_mode": pair_metrics["pair_mode"],
+  "pair_peer": pair_metrics["pair_peer"],
+  "pair_correlation": pair_metrics["pair_correlation"],
+  "spread_momentum_pct": pair_metrics["spread_momentum_pct"],
+  "spread_volatility_pct": pair_metrics["spread_volatility_pct"],
+  "relative_vol_ratio": pair_metrics["relative_vol_ratio"]
 }
 print(json.dumps(out))
 '''

@@ -13,6 +13,7 @@ class RunContext:
     runtime: str
     active_seat_ids: list[str]
     ticker: str
+    tickers: list[str] = field(default_factory=list)
     demo_mode: bool = True
 
 

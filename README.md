@@ -112,12 +112,15 @@ OCI env validation:
 OCI GenAI runtime integration:
 - `OCI_GENAI_ENDPOINT` and `OCI_GENAI_MODEL_ID` are required for configured mode.
 - `OCI_GENAI_API_KEY` is optional. If present, runtime uses Bearer auth mode.
-- Without API key, runtime first attempts OCI SDK signed calls for instance principals/resource principals (when Python package `oci` is installed), then falls back to unsigned request shapes.
+- Without API key, runtime first attempts OCI SDK signed calls using `OCI_GENAI_AUTH_MODE` (`instance_principal` or `user_principal`; default `instance_principal`) when Python package `oci` is installed, then falls back to unsigned request shapes.
 - Optional:
   - `OCI_GENAI_CHAT_PATH` (default `/v1/chat/completions`)
-  - `OCI_GENAI_TIMEOUT_S` (default `8`)
+  - `OCI_GENAI_TIMEOUT_S` (default `120`)
   - `OCI_GENAI_ENABLE` (`1`/`0`, default enabled)
   - `OCI_GENAI_USE_OCI_SDK` (`1`/`0`, default enabled)
+  - `OCI_GENAI_AUTH_MODE` (`instance_principal` or `user_principal`)
+  - `OCI_CONFIG_FILE` (default `~/.oci/config`; used by `user_principal` mode)
+  - `OCI_CONFIG_PROFILE` (default `DEFAULT`; used by `user_principal` mode)
 - If calls fail, runtime falls back to deterministic local text so the demo remains runnable.
 
 LLM diagnostics:

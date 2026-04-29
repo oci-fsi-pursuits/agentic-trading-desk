@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -17,16 +18,15 @@ from runtime.common.env_validation import parse_bool
 from runtime.common.utils import now_iso
 
 LIVE_CONTEXT_TIMEOUT_S = 8.0
+TICKER_RE = re.compile(r"[A-Z][A-Z0-9.-]{0,9}")
 
 
-def build_live_context(
+def _build_single_ticker_live_context(
     ticker: str,
     scenario_dataset: dict[str, Any],
-    pair_peer: str = "",
     active_seat_ids: list[str] | None = None,
     run_id: str | None = None,
 ) -> dict[str, Any]:
-    del pair_peer  # reserved for future pair-aware provider enrichment
     ticker_value = str(ticker or "").strip().upper()
     enabled = parse_bool(os.environ.get("ATD_ENABLE_LIVE_CONTEXT"), default=True)
     baseline = json.loads(json.dumps(scenario_dataset))
@@ -181,3 +181,177 @@ def build_live_context(
         "errors": errors,
         "provider_debug": {domain_name: meta["provider"] for domain_name, meta in domain_metadata.items()},
     }
+
+
+def _extract_tickers(raw: str | list[str] | None, *, limit: int = 6) -> list[str]:
+    if isinstance(raw, list):
+        text = ",".join(str(item or "") for item in raw)
+    else:
+        text = str(raw or "")
+    matches = TICKER_RE.findall(text.upper())
+    if not matches:
+        return []
+    unique: list[str] = []
+    for item in matches:
+        if item not in unique:
+            unique.append(item)
+    cap = max(1, min(int(limit or 1), 8))
+    return unique[:cap]
+
+
+def _replace_ticker_text(value: Any, old: str, new: str) -> Any:
+    if isinstance(value, str):
+        return value.replace(old, new)
+    if isinstance(value, list):
+        return [_replace_ticker_text(item, old, new) for item in value]
+    if isinstance(value, dict):
+        return {key: _replace_ticker_text(item, old, new) for key, item in value.items()}
+    return value
+
+
+def _retarget_dataset_for_ticker(dataset: dict[str, Any], ticker: str) -> dict[str, Any]:
+    target = str(ticker or "").strip().upper()
+    if not target:
+        return json.loads(json.dumps(dataset))
+    adjusted = json.loads(json.dumps(dataset))
+    source = str(adjusted.get("instrument", "") or "").strip().upper()
+    if source and source != target:
+        adjusted = _replace_ticker_text(adjusted, source, target)
+    adjusted["instrument"] = target
+    return adjusted
+
+
+def _pair_relative_metrics(primary_context: dict[str, Any], peer_contexts: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    primary_prices = list(primary_context.get("price_series") or [])
+    primary_latest = float(primary_prices[-1]) if primary_prices else 0.0
+    primary_momentum = (primary_context.get("market_context") or {}).get("momentum_20d_pct")
+    comparisons: dict[str, dict[str, Any]] = {}
+    for peer_ticker, peer_context in peer_contexts.items():
+        peer_prices = list(peer_context.get("price_series") or [])
+        peer_latest = float(peer_prices[-1]) if peer_prices else 0.0
+        peer_momentum = (peer_context.get("market_context") or {}).get("momentum_20d_pct")
+        relative_ratio = None
+        if primary_latest > 0 and peer_latest > 0:
+            relative_ratio = round(primary_latest / peer_latest, 4)
+        momentum_spread = None
+        try:
+            momentum_spread = round(float(primary_momentum) - float(peer_momentum), 3)
+        except (TypeError, ValueError):
+            momentum_spread = None
+        comparisons[peer_ticker] = {
+            "relative_price_ratio": relative_ratio,
+            "momentum_spread_pct": momentum_spread,
+        }
+    return comparisons
+
+
+def build_live_context(
+    ticker: str,
+    scenario_dataset: dict[str, Any],
+    pair_peer: str = "",
+    active_seat_ids: list[str] | None = None,
+    run_id: str | None = None,
+) -> dict[str, Any]:
+    primary_ticker = str(ticker or "").strip().upper()
+    primary_result = _build_single_ticker_live_context(
+        primary_ticker,
+        scenario_dataset,
+        active_seat_ids=active_seat_ids,
+        run_id=run_id,
+    )
+    peer_tickers = [item for item in _extract_tickers(pair_peer, limit=6) if item and item != primary_ticker]
+    if not peer_tickers:
+        primary_result["pair_mode"] = False
+        primary_result["peer_tickers"] = []
+        primary_result["ticker_contexts"] = {
+            primary_ticker: {
+                "coverage": dict(primary_result.get("coverage", {}) or {}),
+                "market_context": dict(primary_result.get("market_context", {}) or {}),
+                "fundamentals": dict(primary_result.get("fundamentals", {}) or {}),
+                "social_context": dict(primary_result.get("social_context", {}) or {}),
+                "news_items": list(primary_result.get("news_items", []) or []),
+            }
+        }
+        return primary_result
+
+    ticker_contexts: dict[str, dict[str, Any]] = {
+        primary_ticker: {
+            "coverage": dict(primary_result.get("coverage", {}) or {}),
+            "domain_metadata": dict(primary_result.get("domain_metadata", {}) or {}),
+            "market_context": dict(primary_result.get("market_context", {}) or {}),
+            "fundamentals": dict(primary_result.get("fundamentals", {}) or {}),
+            "social_context": dict(primary_result.get("social_context", {}) or {}),
+            "news_items": list(primary_result.get("news_items", []) or []),
+            "price_series": list(primary_result.get("price_series", []) or []),
+            "volume_millions": list(primary_result.get("volume_millions", []) or []),
+            "sentiment_score": primary_result.get("sentiment_score"),
+            "ai_basket_correlation": primary_result.get("ai_basket_correlation"),
+            "errors": list(primary_result.get("errors", []) or []),
+        }
+    }
+
+    peer_contexts: dict[str, dict[str, Any]] = {}
+    combined_errors = list(primary_result.get("errors", []) or [])
+    for peer in peer_tickers:
+        peer_dataset = _retarget_dataset_for_ticker(scenario_dataset, peer)
+        peer_result = _build_single_ticker_live_context(
+            peer,
+            peer_dataset,
+            active_seat_ids=active_seat_ids,
+            run_id=run_id,
+        )
+        peer_context = {
+            "coverage": dict(peer_result.get("coverage", {}) or {}),
+            "domain_metadata": dict(peer_result.get("domain_metadata", {}) or {}),
+            "market_context": dict(peer_result.get("market_context", {}) or {}),
+            "fundamentals": dict(peer_result.get("fundamentals", {}) or {}),
+            "social_context": dict(peer_result.get("social_context", {}) or {}),
+            "news_items": list(peer_result.get("news_items", []) or []),
+            "price_series": list(peer_result.get("price_series", []) or []),
+            "volume_millions": list(peer_result.get("volume_millions", []) or []),
+            "sentiment_score": peer_result.get("sentiment_score"),
+            "ai_basket_correlation": peer_result.get("ai_basket_correlation"),
+            "errors": list(peer_result.get("errors", []) or []),
+        }
+        ticker_contexts[peer] = peer_context
+        peer_contexts[peer] = peer_context
+        for item in peer_context.get("errors", []):
+            value = f"{peer}:{item}"
+            if value not in combined_errors:
+                combined_errors.append(value)
+
+    primary_result["pair_mode"] = True
+    primary_result["peer_tickers"] = peer_tickers
+    primary_result["ticker_contexts"] = ticker_contexts
+    primary_result["market_context_by_ticker"] = {
+        item: dict(ctx.get("market_context", {}) or {}) for item, ctx in ticker_contexts.items()
+    }
+    primary_result["fundamentals_by_ticker"] = {
+        item: dict(ctx.get("fundamentals", {}) or {}) for item, ctx in ticker_contexts.items()
+    }
+    primary_result["social_context_by_ticker"] = {
+        item: dict(ctx.get("social_context", {}) or {}) for item, ctx in ticker_contexts.items()
+    }
+    primary_result["news_items_by_ticker"] = {
+        item: list(ctx.get("news_items", []) or []) for item, ctx in ticker_contexts.items()
+    }
+    primary_result["pair_analysis"] = _pair_relative_metrics(ticker_contexts[primary_ticker], peer_contexts)
+    primary_result["errors"] = combined_errors
+
+    quant_dataset = dict(primary_result.get("quant_dataset", {}) or {})
+    quant_dataset["pair_mode"] = True
+    quant_dataset["primary_ticker"] = primary_ticker
+    quant_dataset["peer_tickers"] = peer_tickers
+    quant_dataset["peer_price_series"] = {
+        item: list(ctx.get("price_series", []) or []) for item, ctx in peer_contexts.items()
+    }
+    quant_dataset["peer_sentiment_score"] = {
+        item: ctx.get("sentiment_score") for item, ctx in peer_contexts.items()
+    }
+    quant_dataset["peer_ai_basket_correlation"] = {
+        item: ctx.get("ai_basket_correlation") for item, ctx in peer_contexts.items()
+    }
+    quant_dataset["pair_analysis"] = dict(primary_result.get("pair_analysis", {}) or {})
+    primary_result["quant_dataset"] = quant_dataset
+
+    return primary_result

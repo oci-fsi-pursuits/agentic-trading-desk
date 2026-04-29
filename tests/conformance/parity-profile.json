@@ -6,8 +6,12 @@
       "event_type_sets_by_stage",
       "required_object_ids",
       "decision.outcome",
-      "trade_ticket.side",
-      "trade_ticket.size_bps"
+      "trade_ticket.ticket_type",
+      "trade_ticket.display_instrument",
+      "trade_ticket.primary_leg.side",
+      "trade_ticket.primary_leg.size_bps",
+      "trade_ticket.exposure.gross_bps",
+      "trade_ticket.exposure.net_bps"
     ],
     "ignore": [
       "event_id",

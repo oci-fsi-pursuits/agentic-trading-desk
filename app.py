@@ -4,19 +4,30 @@ import json
 import os
 import re
 import threading
+from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 import urllib.error
 
+from runtime.common.agent_prompts import AGENT_SYSTEM_PROMPTS
+from runtime.common.analyst_tools import execute_local_tool, tool_specs_for_role
 from runtime.common.data_providers import (
     CHART_WINDOWS,
+    fetch_fundamentals_domain,
+    fetch_geopolitical_domain,
+    fetch_macro_domain,
+    fetch_market_domain,
+    fetch_news_domain,
+    fetch_social_domain,
     fetch_chart_snapshot,
+    provider_chain,
 )
 from runtime.common.env_validation import collect_environment_status, load_env_file
-from runtime.common.oci_genai import OciGenAIClient
-from runtime.common.scenario_loader import load_scenario_catalog
+from runtime.common.live_context import build_live_context
+from runtime.common.oci_genai import OciGenAIClient, build_agent_prompt_preview
+from runtime.common.scenario_loader import load_demo_dataset, load_scenario_catalog
 from runtime.common.service import get_adapter
 from runtime.common.store import RunStore
 from runtime.common.utils import ensure_runs_root, make_id, now_iso
@@ -40,16 +51,29 @@ def normalize_single_ticker(raw: str) -> str:
     return match.group(0) if match else ""
 
 
-def normalize_ticker_request(raw: str, max_symbols: int = 2) -> str:
+def normalize_ticker_request(raw: str, max_symbols: int = 4) -> str:
     matches = TICKER_PATTERN.findall((raw or "").upper())
     if not matches:
         return ""
     limit = max(1, min(int(max_symbols or 1), 4))
-    return ",".join(matches[:limit])
+    unique: list[str] = []
+    for item in matches:
+        if item not in unique:
+            unique.append(item)
+    return ",".join(unique[:limit])
 
 
 def parse_bool_flag(raw: str) -> bool:
     return str(raw or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def normalize_breaking_news_mode(raw: str) -> str:
+    key = str(raw or "").strip().lower()
+    if key in {"manual", "manual_now", "manual-now", "immediate"}:
+        return "manual"
+    if key in {"auto_after_gather", "auto-after-gather", "auto", "timer", "timed", "delayed"}:
+        return "auto_after_gather"
+    return "off"
 
 
 def parse_debate_depth(raw: str, default: int = 1) -> int:
@@ -98,12 +122,14 @@ def genai_status() -> dict[str, str]:
     if client.ready():
         if capability["auth_mode"] == "instance_principal_sdk":
             return {"status": "ok", "detail": "OCI GenAI configured (instance-principal signing via OCI SDK)"}
-        if capability["auth_mode"] == "unsigned_no_sdk":
+        if capability["auth_mode"] == "user_principal_sdk":
+            return {"status": "ok", "detail": "OCI GenAI configured (user-principal signing via OCI SDK/config profile)"}
+        if capability["auth_mode"].endswith("_unsigned_no_sdk"):
             return {
                 "status": "ok",
                 "detail": "OCI GenAI configured (no-key mode, OCI SDK unavailable). Live calls may fallback unless endpoint accepts unsigned requests.",
             }
-        return {"status": "ok", "detail": "OCI GenAI configured (no-key unsigned mode)"}
+        return {"status": "ok", "detail": f"OCI GenAI configured ({capability['auth_mode']})"}
     return {"status": "degraded", "detail": "OCI endpoint/model not configured for agent LLM generation"}
 
 
@@ -142,6 +168,282 @@ def health_payload() -> dict:
         "timestamp": now_iso(),
         "checks": checks,
         "environment": env_status,
+    }
+
+
+def _compact_data_status(meta: dict[str, object], *, default_provider: str = "", default_freshness: str = "") -> dict[str, object]:
+    status: dict[str, object] = {}
+    provider = str(default_provider or meta.get("provider", "") or "").strip()
+    freshness = str(default_freshness or meta.get("freshness", "") or "").strip()
+    as_of = str(meta.get("as_of", "") or "").strip()
+    if provider:
+        status["provider"] = provider
+    if freshness:
+        status["freshness"] = freshness
+    if as_of:
+        status["as_of"] = as_of
+    if meta.get("fallback_used"):
+        status["fallback_used"] = True
+    if meta.get("degraded"):
+        status["degraded"] = True
+    return status
+
+
+def _decode_tool_output(raw: str) -> object:
+    text = str(raw or "")
+    try:
+        return json.loads(text)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return text
+
+
+def _safe_fetch(fn):
+    try:
+        return fn()
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": f"debug_fetch_failed:{exc}"}
+
+
+def _build_debug_provider_payload(ticker: str, scenario_id: str, max_words: int, include_statements: bool) -> dict[str, object]:
+    dataset = load_demo_dataset(scenario_id=scenario_id, ticker=ticker)
+    active_debug_seats = [
+        "market_analyst",
+        "news_analyst",
+        "fundamentals_analyst",
+        "social_analyst",
+        "macro_economist",
+        "geopolitical_analyst",
+    ]
+    live_context = build_live_context(
+        ticker,
+        dataset,
+        active_seat_ids=active_debug_seats,
+        run_id=f"debug_{ticker.lower()}",
+    )
+    domain_metadata = dict(live_context.get("domain_metadata", {}) or {})
+    coverage = dict(live_context.get("coverage", {}) or {})
+    market_context = dict(live_context.get("market_context", {}) or {})
+    fundamentals = dict(live_context.get("fundamentals", {}) or {})
+    macro_context = dict(live_context.get("macro_context", {}) or {})
+    geopolitical_context = dict(live_context.get("geopolitical_context", {}) or {})
+    social_context = dict(live_context.get("social_context", {}) or {})
+    news_items = list(live_context.get("news_items", []) or [])
+
+    trade_date = datetime.now(UTC).date().isoformat()
+    news_meta = dict(domain_metadata.get("news", {}) or {})
+    market_freshness = "live" if coverage.get("market") == "live" else "snapshot"
+    news_freshness = "live" if coverage.get("news") == "live" else "snapshot"
+    fundamentals_freshness = "live" if coverage.get("fundamentals") == "live" else "snapshot"
+    social_freshness = "live" if coverage.get("social") == "live" else "snapshot"
+    macro_freshness = "live" if coverage.get("macro") == "live" else "snapshot"
+    geopolitical_freshness = "live" if coverage.get("geopolitical") == "live" else "snapshot"
+    social_end_date = datetime.now(UTC).date()
+    social_start_date = social_end_date - timedelta(days=2)
+
+    prompt_context_by_role: dict[str, dict[str, object]] = {
+        "market_analyst": {
+            "ticker": ticker,
+            "trade_date": trade_date,
+            "analysis_window_days": 120,
+            "market_data_status": _compact_data_status(
+                dict(domain_metadata.get("market", {}) or {}),
+                default_freshness=market_freshness,
+            ),
+        },
+        "news_analyst": {
+            "ticker": ticker,
+            "trade_date": trade_date,
+            "news_mode": "live_news",
+            "analysis_window_days": 7,
+            "news_data_status": _compact_data_status(
+                news_meta,
+                default_provider="yfinance",
+                default_freshness=news_freshness,
+            ),
+        },
+        "fundamentals_analyst": {
+            "ticker": ticker,
+            "trade_date": trade_date,
+            "statement_period": "quarterly",
+            "fundamentals_data_status": _compact_data_status(
+                dict(domain_metadata.get("fundamentals", {}) or {}),
+                default_freshness=fundamentals_freshness,
+            ),
+        },
+        "social_analyst": {
+            "ticker": ticker,
+            "social_context": social_context,
+            "social_data_status": _compact_data_status(
+                dict(domain_metadata.get("social", {}) or {}),
+                default_freshness=social_freshness,
+            ),
+            "stocktwits_snapshot": {
+                "ok": bool(dict(domain_metadata.get("social", {}) or {}).get("ok", False)),
+                "provider": str(dict(domain_metadata.get("social", {}) or {}).get("provider", "stocktwits") or "stocktwits"),
+                "source_count": int(dict(domain_metadata.get("social", {}) or {}).get("source_count", 0) or 0),
+                "freshness": str(dict(domain_metadata.get("social", {}) or {}).get("freshness", "snapshot") or "snapshot"),
+                "as_of": str(dict(domain_metadata.get("social", {}) or {}).get("as_of", now_iso()) or now_iso()),
+                "social_context": social_context,
+            },
+            "x_search_window": {
+                "from_date": social_start_date.isoformat(),
+                "to_date": social_end_date.isoformat(),
+            },
+        },
+        "macro_economist": {
+            "ticker": ticker,
+            "macro_context": macro_context,
+            "macro_data_status": _compact_data_status(
+                dict(domain_metadata.get("macro", {}) or {}),
+                default_freshness=macro_freshness,
+            ),
+        },
+        "geopolitical_analyst": {
+            "ticker": ticker,
+            "geopolitical_context": geopolitical_context,
+            "geopolitical_data_status": _compact_data_status(
+                dict(domain_metadata.get("geopolitical", {}) or {}),
+                default_freshness=geopolitical_freshness,
+            ),
+        },
+    }
+
+    role_words = {
+        "social_analyst": min(max_words, 160),
+    }
+    prompt_preview: dict[str, object] = {}
+    for role_id, context in prompt_context_by_role.items():
+        prompt_preview[role_id] = {
+            "max_words": int(role_words.get(role_id, max_words)),
+            "tools": tool_specs_for_role(role_id),
+            "context": context,
+            "prompt": build_agent_prompt_preview(role_id, context, max_words=int(role_words.get(role_id, max_words))),
+        }
+
+    today = datetime.now(UTC).date()
+    start = (today - timedelta(days=7)).isoformat()
+    end = today.isoformat()
+    tool_runs: dict[str, object] = {
+        "market_analyst": {
+            "get_stock_data": _decode_tool_output(execute_local_tool("get_stock_data", {"ticker": ticker, "lookback_days": 120})),
+            "get_indicators": _decode_tool_output(
+                execute_local_tool(
+                    "get_indicators",
+                    {
+                        "ticker": ticker,
+                        "lookback_days": 120,
+                        "indicators": ["sma_20", "ema_20", "rsi_14", "macd", "bollinger_bands", "atr_14", "support_resistance"],
+                    },
+                )
+            ),
+        },
+        "news_analyst": {
+            "get_news": _decode_tool_output(
+                execute_local_tool(
+                    "get_news",
+                    {
+                        "ticker": ticker,
+                        "start_date": start,
+                        "end_date": end,
+                        "limit": 8,
+                    },
+                )
+            ),
+            "get_global_news": _decode_tool_output(
+                execute_local_tool(
+                    "get_global_news",
+                    {
+                        "curr_date": end,
+                        "look_back_days": 7,
+                        "limit": 10,
+                    },
+                )
+            ),
+        },
+        "macro_economist": {
+            "get_global_news": _decode_tool_output(
+                execute_local_tool(
+                    "get_global_news",
+                    {
+                        "curr_date": end,
+                        "look_back_days": 7,
+                        "limit": 10,
+                    },
+                )
+            ),
+            "get_news": _decode_tool_output(
+                execute_local_tool(
+                    "get_news",
+                    {
+                        "ticker": ticker,
+                        "start_date": start,
+                        "end_date": end,
+                        "limit": 8,
+                    },
+                )
+            ),
+        },
+        "fundamentals_analyst": {
+            "get_fundamentals": _decode_tool_output(execute_local_tool("get_fundamentals", {"ticker": ticker})),
+        },
+        "social_analyst": {
+            "x_search": "external tool (not executed in local debug mode)",
+        },
+    }
+    if include_statements:
+        tool_runs["fundamentals_analyst"]["get_balance_sheet"] = _decode_tool_output(
+            execute_local_tool("get_balance_sheet", {"ticker": ticker, "period": "quarterly"})
+        )
+        tool_runs["fundamentals_analyst"]["get_cashflow"] = _decode_tool_output(
+            execute_local_tool("get_cashflow", {"ticker": ticker, "period": "quarterly"})
+        )
+        tool_runs["fundamentals_analyst"]["get_income_statement"] = _decode_tool_output(
+            execute_local_tool("get_income_statement", {"ticker": ticker, "period": "quarterly"})
+        )
+
+    provider_payloads = {
+        "market_domain": _safe_fetch(lambda: fetch_market_domain(ticker)),
+        "fundamentals_domain": _safe_fetch(lambda: fetch_fundamentals_domain(ticker)),
+        "macro_domain": _safe_fetch(fetch_macro_domain),
+        "geopolitical_domain": _safe_fetch(lambda: fetch_geopolitical_domain(ticker)),
+        "social_domain": _safe_fetch(lambda: fetch_social_domain(ticker, run_id=f"debug_{ticker.lower()}")),
+        "news_domain_default_chain": _safe_fetch(lambda: fetch_news_domain(ticker)),
+        "news_domain_by_provider": {
+            "yfinance": _safe_fetch(lambda: fetch_news_domain(ticker, providers=["yfinance"])),
+            "google_news": _safe_fetch(lambda: fetch_news_domain(ticker, providers=["google_news"])),
+            "finnhub": _safe_fetch(lambda: fetch_news_domain(ticker, providers=["finnhub"])),
+        },
+    }
+
+    return {
+        "ticker": ticker,
+        "scenario_id": scenario_id,
+        "generated_at": now_iso(),
+        "max_words": max_words,
+        "include_statements": include_statements,
+        "provider_chains": {
+            "market": provider_chain("market"),
+            "news": provider_chain("news"),
+            "fundamentals": provider_chain("fundamentals"),
+            "macro": provider_chain("macro"),
+            "social": provider_chain("social"),
+            "geopolitical": provider_chain("geopolitical"),
+        },
+        "live_context_summary": {
+            "coverage": coverage,
+            "errors": list(live_context.get("errors", []) or []),
+            "domain_metadata": domain_metadata,
+            "news_items_count": len(news_items),
+            "market_context": market_context,
+            "macro_context": macro_context,
+            "fundamentals": fundamentals,
+            "social_context": social_context,
+            "geopolitical_context": geopolitical_context,
+        },
+        "providers": provider_payloads,
+        "tool_outputs": tool_runs,
+        "prompt_preview": prompt_preview,
+        "known_prompt_roles": sorted(AGENT_SYSTEM_PROMPTS.keys()),
     }
 
 
@@ -184,6 +486,7 @@ def _launch_run_job(
     seats: list[str],
     ticker: str | None,
     breaking_news: bool = False,
+    breaking_news_mode: str = "off",
     debate_depth: int = 1,
 ) -> None:
     _record_job_state(
@@ -194,6 +497,7 @@ def _launch_run_job(
             "scenario": scenario,
             "ticker": ticker,
             "breaking_news": breaking_news,
+            "breaking_news_mode": breaking_news_mode,
             "debate_depth": debate_depth,
             "started_at": now_iso(),
             "status": "running",
@@ -248,6 +552,7 @@ def _launch_run_job(
                 ticker or None,
                 run_id=run_id,
                 breaking_news=breaking_news,
+                breaking_news_mode=breaking_news_mode,
                 debate_depth=debate_depth,
                 phase_pause=_pause_after_phase,
             )
@@ -257,6 +562,7 @@ def _launch_run_job(
             print(
                 "[RUN] "
                 f"run_id={run_id} runtime={runtime} scenario={scenario} ticker={result.get('summary', {}).get('ticker', '')} "
+                f"breaking_news_mode={result.get('summary', {}).get('breaking_news_mode', 'off')} "
                 f"debate_depth={result.get('summary', {}).get('debate_depth', debate_depth)} "
                 f"llm_live={llm.get('live_count', 'n/a')} llm_fallback={llm.get('fallback_count', 'n/a')} "
                 f"llm_mode={llm.get('last_mode', 'n/a')} auth={llm.get('auth_mode', 'n/a')} "
@@ -285,6 +591,7 @@ def _launch_run_job(
                 },
             )
         except Exception as exc:  # noqa: BLE001
+            print(f"[RUN][ERROR] run_id={run_id} runtime={runtime} scenario={scenario} error={exc}", flush=True)
             _record_job_state(
                 run_id,
                 {
@@ -347,8 +654,12 @@ class AppHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == '/':
             return self._send_file(ROOT / 'frontend/app/index.html', 'text/html; charset=utf-8')
+        if parsed.path == '/debug/providers':
+            return self._send_file(ROOT / 'frontend/app/providers_debug.html', 'text/html; charset=utf-8')
         if parsed.path == '/app.js':
             return self._send_file(ROOT / 'frontend/app/app.js', 'text/javascript; charset=utf-8')
+        if parsed.path == '/providers_debug.js':
+            return self._send_file(ROOT / 'frontend/app/providers_debug.js', 'text/javascript; charset=utf-8')
         if parsed.path.startswith('/var/runs/'):
             target = (ROOT / parsed.path.lstrip('/')).resolve()
             allowed_root = (ROOT / 'var' / 'runs').resolve()
@@ -387,6 +698,28 @@ class AppHandler(BaseHTTPRequestHandler):
             return self._send_json(payload)
         if parsed.path == '/api/scenarios':
             return self._send_json(load_scenario_catalog())
+        if parsed.path == '/api/debug/providers':
+            params = parse_qs(parsed.query)
+            ticker = normalize_single_ticker(params.get('ticker', ['NVDA'])[0]) or 'NVDA'
+            scenario_id = str(params.get('scenario_id', ['single_name_earnings'])[0] or 'single_name_earnings').strip()
+            max_words_raw = params.get('max_words', ['220'])[0]
+            include_statements = parse_bool_flag(params.get('include_statements', ['0'])[0])
+            try:
+                max_words = max(80, min(int(max_words_raw), 800))
+            except (TypeError, ValueError):
+                max_words = 220
+            try:
+                payload = _build_debug_provider_payload(
+                    ticker=ticker,
+                    scenario_id=scenario_id,
+                    max_words=max_words,
+                    include_statements=include_statements,
+                )
+            except KeyError as exc:
+                return self._send_json({"error": "invalid_scenario", "message": str(exc)}, status=400)
+            except Exception as exc:  # noqa: BLE001
+                return self._send_json({"error": "debug_build_failed", "message": str(exc)}, status=500)
+            return self._send_json(payload)
         if parsed.path == '/api/health':
             params = parse_qs(parsed.query)
             verbose = params.get("verbose", ["0"])[0].strip().lower() in {"1", "true", "yes"}
@@ -401,10 +734,13 @@ class AppHandler(BaseHTTPRequestHandler):
             scenario = params.get('scenario', ['single_name_earnings'])[0]
             seats = params.get('seat', [])
             # Ticker request mode: accept single or pair input (e.g., AMZN,ORCL).
-            ticker = normalize_ticker_request(params.get('ticker', [''])[0], max_symbols=2)
+            ticker = normalize_ticker_request(params.get('ticker', [''])[0], max_symbols=4)
             if not ticker:
-                ticker = normalize_ticker_request(params.get('tickers', [''])[0], max_symbols=2)
+                ticker = normalize_ticker_request(params.get('tickers', [''])[0], max_symbols=4)
             breaking_news = parse_bool_flag(params.get('breaking_news', ['0'])[0])
+            breaking_news_mode = normalize_breaking_news_mode(params.get('breaking_news_mode', [''])[0])
+            if breaking_news and breaking_news_mode == "off":
+                breaking_news_mode = "manual"
             debate_depth = parse_debate_depth(params.get('debate_depth', ['1'])[0], default=1)
             try:
                 adapter = get_adapter(runtime)
@@ -413,13 +749,15 @@ class AppHandler(BaseHTTPRequestHandler):
                     seats or None,
                     ticker or None,
                     breaking_news=breaking_news,
+                    breaking_news_mode=breaking_news_mode,
                     debate_depth=debate_depth,
                 )
                 llm = result.get("summary", {}).get("llm", {})
                 print(
                     "[RUN] "
                     f"run_id={result.get('run_id')} runtime={runtime} scenario={scenario} ticker={result.get('summary', {}).get('ticker', '')} "
-                    f"breaking_news={breaking_news} debate_depth={result.get('summary', {}).get('debate_depth', debate_depth)} "
+                    f"breaking_news_mode={result.get('summary', {}).get('breaking_news_mode', breaking_news_mode)} "
+                    f"debate_depth={result.get('summary', {}).get('debate_depth', debate_depth)} "
                     f"llm_live={llm.get('live_count', 'n/a')} llm_fallback={llm.get('fallback_count', 'n/a')} "
                     f"llm_mode={llm.get('last_mode', 'n/a')} auth={llm.get('auth_mode', 'n/a')} "
                     f"error={llm.get('last_error', '')}",
@@ -435,10 +773,13 @@ class AppHandler(BaseHTTPRequestHandler):
             runtime = params.get('runtime', ['wayflow'])[0]
             scenario = params.get('scenario', ['single_name_earnings'])[0]
             seats = params.get('seat', [])
-            ticker = normalize_ticker_request(params.get('ticker', [''])[0], max_symbols=2)
+            ticker = normalize_ticker_request(params.get('ticker', [''])[0], max_symbols=4)
             if not ticker:
-                ticker = normalize_ticker_request(params.get('tickers', [''])[0], max_symbols=2)
+                ticker = normalize_ticker_request(params.get('tickers', [''])[0], max_symbols=4)
             breaking_news = parse_bool_flag(params.get('breaking_news', ['0'])[0])
+            breaking_news_mode = normalize_breaking_news_mode(params.get('breaking_news_mode', [''])[0])
+            if breaking_news and breaking_news_mode == "off":
+                breaking_news_mode = "manual"
             debate_depth = parse_debate_depth(params.get('debate_depth', ['1'])[0], default=1)
             try:
                 get_adapter(runtime)
@@ -452,6 +793,7 @@ class AppHandler(BaseHTTPRequestHandler):
                 seats,
                 ticker or None,
                 breaking_news=breaking_news,
+                breaking_news_mode=breaking_news_mode,
                 debate_depth=debate_depth,
             )
             return self._send_json(
@@ -461,7 +803,7 @@ class AppHandler(BaseHTTPRequestHandler):
                     "runtime": runtime,
                     "scenario_id": scenario,
                     "ticker": ticker,
-                    "breaking_news": breaking_news,
+                    "breaking_news_mode": breaking_news_mode,
                     "debate_depth": debate_depth,
                 }
             )

@@ -35,7 +35,20 @@ OBJECT_REQUIRED_FIELDS = {
     "artifact": {"schema_version", "artifact_id", "artifact_type", "label", "storage_uri", "provenance"},
     "constraint": {"schema_version", "constraint_id", "constraint_type", "label", "severity", "provenance"},
     "decision": {"schema_version", "decision_id", "decision_type", "outcome", "linked_claim_ids", "linked_constraint_ids", "provenance"},
-    "trade_ticket": {"schema_version", "ticket_id", "instrument", "side", "size_bps", "time_horizon", "constraint_ids", "approved_by", "provenance"},
+    "trade_ticket": {
+        "schema_version",
+        "ticket_id",
+        "ticket_type",
+        "display_instrument",
+        "legs",
+        "exposure",
+        "time_horizon",
+        "entry_conditions",
+        "exit_conditions",
+        "constraint_ids",
+        "approved_by",
+        "provenance",
+    },
 }
 
 
@@ -172,7 +185,8 @@ def validate_object(object_type: str, obj: dict[str, Any]) -> None:
         _fail("object", f"unknown object type '{object_type}'")
     context = f"object.{object_type}"
     _require_keys(context, obj, OBJECT_REQUIRED_FIELDS[object_type])
-    if obj["schema_version"] != "v1":
+    expected_schema_version = "v2" if object_type == "trade_ticket" else "v1"
+    if obj["schema_version"] != expected_schema_version:
         _fail(context, f"unsupported schema_version '{obj['schema_version']}'")
 
     id_field = {
@@ -248,13 +262,84 @@ def validate_object(object_type: str, obj: dict[str, Any]) -> None:
         if "requires_risk_recheck" in obj and not isinstance(obj["requires_risk_recheck"], bool):
             _fail(f"{context}.requires_risk_recheck", "must be a boolean")
     elif object_type == "trade_ticket":
-        if obj["side"] not in {"BUY", "SELL", "HOLD"}:
-            _fail(f"{context}.side", f"invalid value '{obj['side']}'")
+        if obj["ticket_type"] not in {"single_leg", "pair_trade"}:
+            _fail(f"{context}.ticket_type", f"invalid value '{obj['ticket_type']}'")
+        if not isinstance(obj["display_instrument"], str) or not obj["display_instrument"].strip():
+            _fail(f"{context}.display_instrument", "must be a non-empty string")
+        if not isinstance(obj["legs"], list) or not obj["legs"]:
+            _fail(f"{context}.legs", "must be a non-empty list")
+        leg_roles: list[str] = []
+        gross_bps = 0.0
+        net_bps = 0.0
+        for index, leg in enumerate(obj["legs"]):
+            if not isinstance(leg, dict):
+                _fail(f"{context}.legs[{index}]", "must be an object")
+            _require_keys(f"{context}.legs[{index}]", leg, {"leg_id", "instrument", "side", "size_bps", "role"})
+            _assert_identifier(f"{context}.legs[{index}].leg_id", leg["leg_id"])
+            if not isinstance(leg["instrument"], str) or not TICKER_RE.fullmatch(leg["instrument"]):
+                _fail(f"{context}.legs[{index}].instrument", f"invalid ticker '{leg['instrument']}'")
+            if leg["side"] not in {"BUY", "SELL", "HOLD"}:
+                _fail(f"{context}.legs[{index}].side", f"invalid value '{leg['side']}'")
+            if not isinstance(leg["size_bps"], (int, float)) or leg["size_bps"] < 0:
+                _fail(f"{context}.legs[{index}].size_bps", "must be a number >= 0")
+            if leg["role"] not in {"primary", "hedge"}:
+                _fail(f"{context}.legs[{index}].role", f"invalid value '{leg['role']}'")
+            leg_roles.append(str(leg["role"]))
+            size_bps = float(leg["size_bps"])
+            if leg["side"] in {"BUY", "SELL"}:
+                gross_bps += size_bps
+            if leg["side"] == "BUY":
+                net_bps += size_bps
+            elif leg["side"] == "SELL":
+                net_bps -= size_bps
+
+        if leg_roles.count("primary") != 1:
+            _fail(f"{context}.legs", "must include exactly one primary leg")
+        if obj["ticket_type"] == "single_leg":
+            if len(obj["legs"]) != 1:
+                _fail(f"{context}.legs", "single_leg tickets must contain exactly one leg")
+            if "hedge" in leg_roles:
+                _fail(f"{context}.legs", "single_leg tickets cannot include hedge legs")
+        elif len(obj["legs"]) != 2:
+            _fail(f"{context}.legs", "pair_trade tickets must contain exactly two legs")
+        if obj["ticket_type"] == "pair_trade" and "hedge" not in leg_roles:
+            _fail(f"{context}.legs", "pair_trade tickets must include a hedge leg")
+
+        exposure = obj["exposure"]
+        if not isinstance(exposure, dict):
+            _fail(f"{context}.exposure", "must be an object")
+        _require_keys(f"{context}.exposure", exposure, {"gross_bps", "net_bps"})
+        if not isinstance(exposure["gross_bps"], (int, float)) or exposure["gross_bps"] < 0:
+            _fail(f"{context}.exposure.gross_bps", "must be a number >= 0")
+        if not isinstance(exposure["net_bps"], (int, float)):
+            _fail(f"{context}.exposure.net_bps", "must be numeric")
+        if abs(float(exposure["gross_bps"]) - gross_bps) > 1e-6:
+            _fail(
+                f"{context}.exposure.gross_bps",
+                f"must match leg-derived gross_bps ({gross_bps})",
+            )
+        if abs(float(exposure["net_bps"]) - net_bps) > 1e-6:
+            _fail(
+                f"{context}.exposure.net_bps",
+                f"must match leg-derived net_bps ({net_bps})",
+            )
         if obj["time_horizon"] not in {"event_tactical", "swing", "core_position"}:
             _fail(f"{context}.time_horizon", f"invalid value '{obj['time_horizon']}'")
+        if not isinstance(obj["entry_conditions"], list):
+            _fail(f"{context}.entry_conditions", "must be a list")
+        for index, condition in enumerate(obj["entry_conditions"]):
+            if not isinstance(condition, str):
+                _fail(f"{context}.entry_conditions[{index}]", "must be a string")
+        if not isinstance(obj["exit_conditions"], list):
+            _fail(f"{context}.exit_conditions", "must be a list")
+        for index, condition in enumerate(obj["exit_conditions"]):
+            if not isinstance(condition, str):
+                _fail(f"{context}.exit_conditions[{index}]", "must be a string")
+        if not isinstance(obj["constraint_ids"], list):
+            _fail(f"{context}.constraint_ids", "must be a list")
         if obj["approved_by"] not in ROLE_IDS:
             _fail(f"{context}.approved_by", f"unknown role '{obj['approved_by']}'")
-        for constraint_id in obj.get("constraint_ids", []):
+        for constraint_id in obj["constraint_ids"]:
             _assert_identifier(f"{context}.constraint_ids[]", constraint_id)
 
 

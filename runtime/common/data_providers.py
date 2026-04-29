@@ -14,7 +14,6 @@ from email.utils import parsedate_to_datetime
 from typing import Any
 from xml.etree import ElementTree
 
-from runtime.common.oci_genai import OciGenAIClient
 from runtime.common.utils import now_iso
 
 try:
@@ -33,6 +32,7 @@ USER_AGENT = "agentic-trading-desk/1.0 (+providers)"
 REQUEST_TIMEOUT_S = 5.0
 DATA_LOG_ENABLED = str(os.environ.get("ATD_DATA_LOG", "1")).strip().lower() in {"1", "true", "yes", "on"}
 LOGGER = logging.getLogger("agentic_trading_desk.data")
+LLM_LOG_ENABLED = str(os.environ.get("ATD_LOG_LLM", "1")).strip().lower() in {"1", "true", "yes", "on"}
 try:
     X_SEARCH_LOOKBACK_DAYS = max(1, min(14, int(os.environ.get("ATD_X_SEARCH_LOOKBACK_DAYS", "2") or "2")))
 except (TypeError, ValueError):
@@ -53,7 +53,7 @@ DEFAULT_PROVIDER_CHAINS: dict[str, tuple[str, ...]] = {
     "macro": ("fred", "yfinance"),
     "geopolitical": ("google_news", "finnhub"),
     "fundamentals": ("yfinance", "finnhub"),
-    "social": ("x_search", "stocktwits"),
+    "social": ("stocktwits",),
 }
 
 GEOPOLITICAL_RISK_KEYWORDS = (
@@ -104,6 +104,12 @@ def _data_log(domain: str, provider: str, status: str, detail: str) -> None:
         return
     print(f"[DATA] domain={domain} provider={provider} status={status} detail={detail}", flush=True)
     LOGGER.info("domain=%s provider=%s status=%s detail=%s", domain, provider, status, detail)
+
+
+def _social_debug(detail: str) -> None:
+    if not LLM_LOG_ENABLED:
+        return
+    print(f"[LLM] social_pipeline {detail}", flush=True)
 
 
 def _request_json(
@@ -264,10 +270,11 @@ def provider_chain(domain: str) -> list[str]:
         if domain_name != "social":
             return providers
         aliases = {
-            "finnhub": "stocktwits",
-            "x": "x_search",
+            "x_search": "stocktwits",
+            "x": "stocktwits",
             "news_proxy": "stocktwits",
             "yfinance_proxy": "stocktwits",
+            "finnhub": "stocktwits",
         }
         normalized: list[str] = []
         seen: set[str] = set()
@@ -304,9 +311,9 @@ def _base_result(domain: str, provider: str, ok: bool, *, error: str = "", sourc
     }
 
 
-def _run_provider_chain(domain: str, handlers: dict[str, Any]) -> dict[str, Any]:
+def _run_provider_chain(domain: str, handlers: dict[str, Any], *, providers: list[str] | None = None) -> dict[str, Any]:
     attempts: list[str] = []
-    chain = provider_chain(domain)
+    chain = list(providers or provider_chain(domain))
     for idx, provider in enumerate(chain):
         handler = handlers.get(provider)
         if handler is None:
@@ -518,6 +525,11 @@ def _article_freshness(items: list[dict[str, Any]]) -> str:
     return _freshness_from_timestamp(freshest)
 
 
+def _google_news_rss_url(ticker: str) -> str:
+    query = urllib.parse.quote(str(ticker or "").strip())
+    return f"https://news.google.com/rss/search?q={query}+when:7d&hl=en-US&gl=US&ceid=US:en"
+
+
 def _compute_market_payload(ticker: str, chart_payload: dict[str, Any], benchmark_payload: dict[str, Any] | None, provider: str) -> dict[str, Any]:
     points = chart_payload["points"]
     closes = [float(point["close"]) for point in points]
@@ -601,7 +613,14 @@ def _fetch_chart_yahoo(ticker: str, range_key: str) -> dict[str, Any]:
             "currency": chart.get("currency", "USD"),
             "regular_market_price": chart.get("regular_market_price"),
             "previous_close": chart.get("previous_close"),
-            "points": [{"ts": point["ts"], "close": point["close"]} for point in chart["points"]],
+            "points": [
+                {
+                    "ts": point["ts"],
+                    "close": point["close"],
+                    "volume": point.get("volume"),
+                }
+                for point in chart["points"]
+            ],
             "source": "yfinance",
             "as_of": chart["as_of"],
         }
@@ -677,7 +696,14 @@ def _fetch_chart_finnhub(ticker: str, range_key: str) -> dict[str, Any]:
             "currency": chart.get("currency", "USD"),
             "regular_market_price": chart.get("regular_market_price"),
             "previous_close": chart.get("previous_close"),
-            "points": [{"ts": point["ts"], "close": point["close"]} for point in chart["points"]],
+            "points": [
+                {
+                    "ts": point["ts"],
+                    "close": point["close"],
+                    "volume": point.get("volume"),
+                }
+                for point in chart["points"]
+            ],
             "source": "Finnhub",
             "as_of": chart["as_of"],
         }
@@ -772,7 +798,7 @@ def _fetch_news_yahoo(ticker: str) -> dict[str, Any]:
                 "link": link,
             }
         )
-    news_items = news_items[:6]
+    news_items = news_items[:20]
     if not news_items:
         return _base_result("news", "yfinance", False, error="news_empty")
     result = _base_result("news", "yfinance", True, freshness=_article_freshness(news_items), source_count=len(news_items))
@@ -781,8 +807,7 @@ def _fetch_news_yahoo(ticker: str) -> dict[str, Any]:
 
 
 def _fetch_news_google(ticker: str) -> dict[str, Any]:
-    query = urllib.parse.quote(f"{ticker} stock earnings guidance results")
-    xml_text = _request_text(f"https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en")
+    xml_text = _request_text(_google_news_rss_url(ticker))
     if not xml_text:
         return _base_result("news", "google_news", False, error="news_unavailable")
     try:
@@ -795,21 +820,22 @@ def _fetch_news_google(ticker: str) -> dict[str, Any]:
         if not title:
             continue
         published_at = _parse_rfc822(item.findtext("pubDate"))
-        summary = (item.findtext("description") or "").strip()
+        article_link = (item.findtext("link") or "").strip()
         news_items.append(
             {
                 "title": title,
-                "summary": summary or title,
+                "summary": title,
                 "freshness": _freshness_from_timestamp(published_at),
                 "publisher": (item.findtext("source") or "").strip(),
                 "published_at": published_at or "",
-                "link": (item.findtext("link") or "").strip(),
+                "link": article_link,
             }
         )
     if not news_items:
         return _base_result("news", "google_news", False, error="news_empty")
     result = _base_result("news", "google_news", True, freshness=_article_freshness(news_items), source_count=len(news_items))
-    result["news_items"] = news_items[:6]
+    result["news_items"] = news_items[:8]
+    result["article_links"] = [str(item.get("link", "") or "").strip() for item in result["news_items"] if str(item.get("link", "") or "").strip()][:8]
     return result
 
 
@@ -842,7 +868,7 @@ def _fetch_news_finnhub(ticker: str) -> dict[str, Any]:
     return result
 
 
-def fetch_news_domain(ticker: str) -> dict[str, Any]:
+def fetch_news_domain(ticker: str, *, providers: list[str] | None = None) -> dict[str, Any]:
     return _run_provider_chain(
         "news",
         {
@@ -850,6 +876,7 @@ def fetch_news_domain(ticker: str) -> dict[str, Any]:
             "yfinance": lambda: _fetch_news_yahoo(ticker),
             "finnhub": lambda: _fetch_news_finnhub(ticker),
         },
+        providers=providers,
     )
 
 
@@ -1353,151 +1380,6 @@ def _label_from_sentiment_score(score: float) -> str:
     return "neutral"
 
 
-def _fetch_social_x_search(ticker: str) -> dict[str, Any]:
-    symbol = str(ticker or "").strip().upper()
-    if not symbol:
-        return _base_result("social", "x_search", False, error="ticker_missing")
-    client = OciGenAIClient()
-    if not client.ready():
-        return _base_result("social", "x_search", False, error="x_search_unconfigured")
-
-    end_date = datetime.now(UTC).date()
-    start_date = end_date - timedelta(days=max(1, int(X_SEARCH_LOOKBACK_DAYS)))
-    system_prompt = (
-        "You are a social sentiment analyst for an institutional trading desk. "
-        "When tool-enabled runtime support is available, use x_search evidence. "
-        "If tool support is unavailable, explicitly note reduced evidence quality and avoid fabrication. "
-        "Return STRICT JSON only."
-    )
-    prompt = (
-        f"Analyze X sentiment for ticker {symbol}. Search posts mentioning {symbol} or ${symbol}. "
-        f"Use only x_search results between {start_date.isoformat()} and {end_date.isoformat()}. "
-        "Return STRICT JSON only with keys: "
-        "sentiment_score (0..1), sentiment_label (long|short|neutral), mention_count_24h, mention_velocity_per_hour, "
-        "bullish_count, bearish_count, neutral_count, crowding_risk (low|moderate|high), posts (array up to 8 items). "
-        "Each post must include title, url, created_at, score, comments, sentiment_score."
-    )
-    text = client.complete_with_responses(
-        system_prompt,
-        prompt,
-        tools=[
-            {
-                "type": "x_search",
-                "from_date": start_date.isoformat(),
-                "to_date": end_date.isoformat(),
-                "enable_image_understanding": False,
-                "enable_video_understanding": False,
-            }
-        ],
-        max_tokens=1200,
-        temperature=0.1,
-    )
-    if not isinstance(text, str) or not text.strip():
-        return _base_result("social", "x_search", False, error=client.last_error or "x_search_unavailable")
-    summary = _extract_json_object(text)
-    if not isinstance(summary, dict):
-        return _base_result("social", "x_search", False, error="x_search_parse_failed")
-
-    sentiment_score = _safe_float(summary.get("sentiment_score"))
-    if sentiment_score is None:
-        sentiment_score = _safe_float(summary.get("score"))
-    if sentiment_score is None:
-        sentiment_score = 0.5
-    if sentiment_score > 1.0 and sentiment_score <= 100.0:
-        sentiment_score = sentiment_score / 100.0
-    sentiment_score = _clamp(float(sentiment_score), 0.0, 1.0)
-    sentiment_label = str(summary.get("sentiment_label", "") or "").strip().lower()
-    if sentiment_label not in {"long", "short", "neutral"}:
-        sentiment_label = _label_from_sentiment_score(sentiment_score)
-
-    posts_in = list(summary.get("posts") or summary.get("top_posts") or [])
-    posts: list[dict[str, Any]] = []
-    for raw in posts_in[:8]:
-        if not isinstance(raw, dict):
-            continue
-        title = str(raw.get("title", "") or raw.get("text", "") or "").strip()
-        if not title:
-            continue
-        post_sentiment = _safe_float(raw.get("sentiment_score"))
-        if post_sentiment is None:
-            post_sentiment = _safe_float(raw.get("score_sentiment"))
-        if post_sentiment is None:
-            post_sentiment = _lexical_sentiment_score(title)
-        if post_sentiment > 1.0 and post_sentiment <= 100.0:
-            post_sentiment = post_sentiment / 100.0
-        post = {
-            "title": title,
-            "subreddit": "x",
-            "score": _safe_int(raw.get("score", raw.get("likes", raw.get("like_count"))), 0),
-            "comments": _safe_int(raw.get("comments", raw.get("reply_count")), 0),
-            "created_at": str(raw.get("created_at", "") or raw.get("timestamp", "") or "").strip(),
-            "url": str(raw.get("url", "") or "").strip(),
-            "sentiment_score": _clamp(float(post_sentiment), 0.0, 1.0),
-        }
-        posts.append(post)
-
-    mention_count_24h = _safe_int(summary.get("mention_count_24h"), 0)
-    if mention_count_24h <= 0:
-        mention_count_24h = len(posts)
-    mention_velocity = _safe_float(summary.get("mention_velocity_per_hour"))
-    if mention_velocity is None:
-        mention_velocity = float(mention_count_24h) / 24.0
-    bullish_count = _safe_int(summary.get("bullish_count"), 0)
-    bearish_count = _safe_int(summary.get("bearish_count"), 0)
-    neutral_count = _safe_int(summary.get("neutral_count"), 0)
-    if bullish_count == 0 and bearish_count == 0 and neutral_count == 0 and posts:
-        for item in posts:
-            post_score = float(item.get("sentiment_score", 0.5))
-            if post_score >= 0.65:
-                bullish_count += 1
-            elif post_score <= 0.35:
-                bearish_count += 1
-            else:
-                neutral_count += 1
-    crowding_risk = str(summary.get("crowding_risk", "") or "").strip().lower()
-    if crowding_risk not in {"low", "moderate", "high"}:
-        if mention_count_24h >= 25:
-            crowding_risk = "high"
-        elif mention_count_24h >= 10:
-            crowding_risk = "moderate"
-        else:
-            crowding_risk = "low"
-
-    source_count = len(posts) if posts else mention_count_24h
-    if source_count <= 0:
-        return _base_result("social", "x_search", False, error="x_search_empty")
-
-    result = _base_result("social", "x_search", True, freshness="live", source_count=source_count)
-    result["social_context"] = {
-        "sentiment_score": round(sentiment_score, 3),
-        "sentiment_label": sentiment_label,
-        "mention_count_24h": mention_count_24h,
-        "mention_velocity_per_hour": round(float(mention_velocity), 3),
-        "bullish_count": bullish_count,
-        "bearish_count": bearish_count,
-        "neutral_count": neutral_count,
-        "crowding_risk": crowding_risk,
-        "posts": [
-            {
-                "title": item.get("title", ""),
-                "subreddit": "x",
-                "score": item.get("score", 0),
-                "comments": item.get("comments", 0),
-                "created_at": item.get("created_at", ""),
-                "url": item.get("url", ""),
-            }
-            for item in posts
-        ],
-        "window": {
-            "from_date": start_date.isoformat(),
-            "to_date": end_date.isoformat(),
-            "lookback_days": int(X_SEARCH_LOOKBACK_DAYS),
-        },
-        "as_of": now_iso(),
-    }
-    return result
-
-
 def _stocktwits_access_token() -> str:
     return os.environ.get("STOCKTWITS_ACCESS_TOKEN", "").strip()
 
@@ -1593,6 +1475,19 @@ def _fetch_social_stocktwits(ticker: str) -> dict[str, Any]:
     return result
 
 
+def _stocktwits_snapshot(ticker: str) -> dict[str, Any]:
+    result = _fetch_social_stocktwits(ticker)
+    return {
+        "ok": bool(result.get("ok", False)),
+        "provider": "stocktwits",
+        "error": str(result.get("error", "") or ""),
+        "source_count": int(result.get("source_count", 0) or 0),
+        "freshness": str(result.get("freshness", "snapshot") or "snapshot"),
+        "as_of": str(result.get("as_of", now_iso()) or now_iso()),
+        "social_context": dict(result.get("social_context") or {}),
+    }
+
+
 def _fetch_social_news_proxy(ticker: str) -> dict[str, Any]:
     # Last-resort proxy when direct social APIs are unavailable: derive crowd tone from available news feeds.
     news_result = fetch_news_domain(ticker)
@@ -1637,12 +1532,4 @@ def _fetch_social_yfinance_proxy(ticker: str) -> dict[str, Any]:
 
 def fetch_social_domain(ticker: str, run_id: str | None = None) -> dict[str, Any]:
     _ = run_id
-    return _run_provider_chain(
-        "social",
-        {
-            "x_search": lambda: _fetch_social_x_search(ticker),
-            "stocktwits": lambda: _fetch_social_stocktwits(ticker),
-            "news_proxy": lambda: _fetch_social_news_proxy(ticker),
-            "yfinance_proxy": lambda: _fetch_social_yfinance_proxy(ticker),
-        },
-    )
+    return _fetch_social_stocktwits(ticker)

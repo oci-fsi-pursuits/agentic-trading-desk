@@ -96,7 +96,7 @@
       "constraint_id": "position_limit",
       "constraint_type": "position_limit",
       "label": "Remaining exposure cap after review",
-      "value": 0,
+      "value": 100,
       "severity": "blocking"
     }
   ],

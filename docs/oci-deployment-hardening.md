@@ -18,11 +18,14 @@ Default required variables:
 Controls:
 - `STRICT_ENV_VALIDATION=1`: startup fails if required vars are missing.
 - `REQUIRED_ENV_VARS`: optional comma-separated override for required keys.
-- `OCI_GENAI_API_KEY`: optional Bearer mode credential. Not required in instance-principal/no-key environments.
+- `OCI_GENAI_API_KEY`: optional Bearer mode credential. Not required in principal-based no-key environments.
 - `OCI_GENAI_CHAT_PATH`: chat endpoint path override (default `/v1/chat/completions`).
-- `OCI_GENAI_TIMEOUT_S`: request timeout in seconds (default `8`).
+- `OCI_GENAI_TIMEOUT_S`: request timeout in seconds (default `120`).
 - `OCI_GENAI_ENABLE`: set to `0` to disable live LLM calls and force deterministic fallback.
-- `OCI_GENAI_USE_OCI_SDK`: when `1` (default), no-key mode attempts OCI SDK signed requests (instance/resource principal) before unsigned fallbacks.
+- `OCI_GENAI_USE_OCI_SDK`: when `1` (default), no-key mode attempts OCI SDK signed requests before unsigned fallbacks.
+- `OCI_GENAI_AUTH_MODE`: signer mode in no-key SDK path (`instance_principal` or `user_principal`; default `instance_principal`).
+- `OCI_CONFIG_FILE`: OCI config file path for `user_principal` mode (default `~/.oci/config`).
+- `OCI_CONFIG_PROFILE`: OCI config profile for `user_principal` mode (default `DEFAULT`).
 
 Example:
 
@@ -48,7 +51,7 @@ Checks currently included:
 - Runtime adapter initialization (`wayflow`, `langgraph`)
 - Writable run storage under `var/runs`
 - Scenario catalog loading
-- OCI GenAI configuration mode (`api_key`, instance-principal SDK, or unsigned fallback mode)
+- OCI GenAI configuration mode (`api_key`, principal-based SDK signing, or unsigned fallback mode)
 
 ## Audit visibility
 

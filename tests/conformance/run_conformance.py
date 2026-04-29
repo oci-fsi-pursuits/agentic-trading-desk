@@ -37,8 +37,15 @@ def validate_parity(left, right):
     assert event_types(left['events']) == event_types(right['events'])
     left_ticket = next(iter(left['objects']['trade_ticket'].values()))
     right_ticket = next(iter(right['objects']['trade_ticket'].values()))
-    assert left_ticket['side'] == right_ticket['side']
-    assert left_ticket['size_bps'] == right_ticket['size_bps']
+    assert left_ticket['ticket_type'] == right_ticket['ticket_type']
+    assert left_ticket['display_instrument'] == right_ticket['display_instrument']
+    assert len(left_ticket['legs']) == len(right_ticket['legs'])
+    left_primary_leg = next((leg for leg in left_ticket['legs'] if leg.get('role') == 'primary'), left_ticket['legs'][0])
+    right_primary_leg = next((leg for leg in right_ticket['legs'] if leg.get('role') == 'primary'), right_ticket['legs'][0])
+    assert left_primary_leg['side'] == right_primary_leg['side']
+    assert left_primary_leg['size_bps'] == right_primary_leg['size_bps']
+    assert left_ticket['exposure']['gross_bps'] == right_ticket['exposure']['gross_bps']
+    assert left_ticket['exposure']['net_bps'] == right_ticket['exposure']['net_bps']
     left_decisions = sorted(item['outcome'] for item in left['objects']['decision'].values())
     right_decisions = sorted(item['outcome'] for item in right['objects']['decision'].values())
     assert left_decisions == right_decisions
